@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Command Center | LBAS System v8.0 – UI Stabilization & Structural Hardening</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { 
+            --admin-dark: #0f172a; 
+            --accent: #38bdf8; 
+            --sidebar-w: 270px; 
+            --lock-overlay: rgba(241, 245, 249, 0.96);
+            --card-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --text-primary-contrast: #ffffff;
+            --text-secondary-contrast: #f1f1f1;
+            --text-highlight: #ffd54f;
+            --text-muted-contrast: rgba(255, 255, 255, 0.75);
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background-image: url("https://www.tangubcity.gov.ph/application/files/1116/1768/0018/NEW_6322.JPG");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+            font-family: 'Inter', system-ui, sans-serif;
+            overflow-x: hidden;
+            color: #334155;
+            min-height: 100%;
+        }
+        .dashboard-layout {
+            display: flex;
+            flex: 1;
+            align-items: stretch;
+        }
+        /* Navigation & Sidebar */
+        .sidebar { background: var(--admin-dark); color: white; position: relative; z-index: 100; width: var(--sidebar-w); padding: 25px; transition: 0.3s; display: flex; flex-direction: column; border-right: 1px solid #1e293b; }
+
+        header {
+            position: relative;
+            z-index: 2000;
+        }
+        .main-content,
+        .dashboard-main {
+            flex: 1;
+            padding: 40px;
+            transition: 0.3s;
+            position: relative;
+            isolation: isolate;
+            background-image: url("https://www.tangubcity.gov.ph/application/files/1116/1768/0018/NEW_6322.JPG");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            overflow: visible;
+        }
+
+        .main-content::before,
+        .dashboard-main::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .main-content > *,
+        .dashboard-main > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .main-content > header h2,
+        .main-content > header p,
+        .main-content > header #systemStateText {
+            color: #f8fafc !important;
+        }
+        
+        .nav-link { cursor: pointer; transition: 0.2s; border-radius: 12px !important; margin-bottom: 8px; padding: 12px 15px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; }
+        .nav-link:hover { background: rgba(255,255,255,0.08); transform: translateX(5px); }
+        .nav-link.active { background: var(--accent) !important; color: var(--admin-dark) !important; font-weight: 800; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); }
+        .nav-link.active i { color: var(--admin-dark) !important; }
+
+        /* Floating Admin Card */
+        .admin-profile-trigger { cursor: pointer; }
+        #global-dropdown-container {
+            position: fixed;
+            inset: 0;
+            z-index: 4500;
+            pointer-events: none;
+        }
+        .side-down-card,
+        .account-dropdown {
+            position: fixed !important;
+            top: 0;
+            left: 0;
+            width: 380px;
+            background: white; border-radius: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.2); 
+            z-index: 5000 !important; display: none; border: 1px solid #e2e8f0;
+            padding: 30px; animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: auto;
+        }
+        .side-down-card.active { display: block; }
+        
+        /* Security Overlays */
+        .control-lock-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--lock-overlay); border-radius: 18px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10; backdrop-filter: blur(2px); transition: 0.5s;
+        }
+        .lock-icon { font-size: 3.5rem; color: #94a3b8; margin-bottom: 20px; animation: bounce 2s infinite; }
+        .is-unlocked .control-lock-overlay { opacity: 0; pointer-events: none; transform: scale(1.1); }
+        
+        /* Component Styling */
+        .card { border: none; border-radius: 24px; box-shadow: var(--card-shadow); margin-bottom: 30px; transition: 0.3s; overflow: hidden; background: white; }
+        .card:hover { transform: translateY(-3px); }
+
+        .glass-card {
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25);
+            position: relative;
+            z-index: 1;
+        }
+
+        .glass-card .table,
+        .glass-card .table thead,
+        .glass-card .table tbody,
+        .glass-card .table th,
+        .glass-card .table td,
+        .glass-card .card-header {
+            background-color: transparent !important;
+        }
+
+        .glass-card h5,
+        .glass-card p,
+        .glass-card .small,
+        .glass-card .text-muted,
+        .glass-card .table,
+        .glass-card .table th,
+        .glass-card .table td,
+        .glass-card label {
+            color: var(--text-secondary-contrast) !important;
+        }
+
+        .dashboard-main,
+        .dashboard-main .fw-bold,
+        .dashboard-main h1,
+        .dashboard-main h2,
+        .dashboard-main h3,
+        .dashboard-main h4,
+        .dashboard-main h5,
+        .dashboard-main h6,
+        .dashboard-main .text-dark,
+        .dashboard-main code {
+            color: var(--text-primary-contrast) !important;
+        }
+
+        .dashboard-main p,
+        .dashboard-main label,
+        .dashboard-main .small,
+        .dashboard-main .text-white-50,
+        .dashboard-main .text-muted {
+            color: var(--text-muted-contrast) !important;
+        }
+
+        .dashboard-main .text-primary,
+        .dashboard-main .border-primary,
+        .dashboard-main .border-primary-subtle {
+            color: var(--text-highlight) !important;
+            border-color: rgba(255, 213, 79, 0.6) !important;
+        }
+
+        .dashboard-main .bg-primary,
+        .dashboard-main .bg-primary-subtle {
+            background: rgba(255, 213, 79, 0.18) !important;
+            color: var(--text-highlight) !important;
+        }
+
+        .dashboard-main .cat-pill {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            color: var(--text-secondary-contrast);
+        }
+
+        .dashboard-main .cat-pill:hover,
+        .dashboard-main .cat-pill.active {
+            background: rgba(255, 213, 79, 0.2);
+            border-color: rgba(255, 213, 79, 0.8);
+            color: var(--text-highlight);
+            box-shadow: 0 4px 12px rgba(255, 213, 79, 0.25);
+        }
+
+        .dashboard-main table { color: var(--text-primary-contrast) !important; }
+        .dashboard-main table th { color: var(--text-highlight) !important; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.32) !important; }
+        .dashboard-main table tr { border-bottom: 1px solid rgba(255,255,255,0.2); }
+        .dashboard-main table tr:hover { background: rgba(255,255,255,0.08); }
+
+        .dashboard-main .btn-primary {
+            background: #ffd54f;
+            color: #000;
+            font-weight: 600;
+            border: none;
+        }
+
+        .dashboard-main .btn-danger,
+        .dashboard-main .btn-outline-danger:hover {
+            background: #e53935;
+            color: #fff;
+            border-color: #e53935;
+        }
+
+        .dashboard-main .btn-light,
+        .dashboard-main .btn-outline-danger,
+        .dashboard-main .btn-secondary {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.35);
+        }
+
+        .dashboard-main .btn-primary:hover,
+        .dashboard-main .btn-light:hover,
+        .dashboard-main .btn-secondary:hover,
+        .dashboard-main .btn-outline-danger:hover {
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+            filter: brightness(1.02);
+        }
+
+        /* Batch category selector visibility hardening (scoped only to admin batch selector) */
+        #bulkCard {
+            overflow: visible;
+        }
+
+        #bulkCard .batch-category-dropdown {
+            position: relative;
+            z-index: 3200;
+            isolation: isolate;
+        }
+
+        #bulkCard .batch-category-dropdown,
+        #bulkCard #batch-category-selector,
+        #bulkCard #batchCategorySelect,
+        #bulkCard .batch-category-dropdown select {
+            background: rgba(0, 0, 0, 0.85) !important;
+            color: #ffffff !important;
+            border: 2px solid #ffd54f !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+        }
+
+        #bulkCard #batchCategorySelect {
+            position: relative;
+            z-index: 3200;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            padding-right: 2.5rem;
+            background-image:
+                linear-gradient(45deg, transparent 50%, #ffffff 50%),
+                linear-gradient(135deg, #ffffff 50%, transparent 50%);
+            background-position:
+                calc(100% - 18px) calc(50% - 3px),
+                calc(100% - 12px) calc(50% - 3px);
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
+        }
+
+        #bulkCard #batchCategorySelect:focus,
+        #bulkCard #batchCategorySelect:active {
+            background: rgba(0, 0, 0, 0.9) !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            border-color: #ffd54f !important;
+            box-shadow: 0 0 0 0.2rem rgba(255, 213, 79, 0.35) !important;
+            outline: none;
+        }
+
+        #bulkCard .batch-category-dropdown option,
+        #bulkCard #batchCategorySelect option {
+            background: rgba(0, 0, 0, 0.85) !important;
+            color: #ffffff !important;
+            padding: 10px;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        #batchCategorySelect option:hover,
+        #batchCategorySelect option:focus,
+        #batchCategorySelect option:checked {
+            background: #ffd54f !important;
+            color: #000000;
+            font-weight: 700;
+        }
+
+        #bulkCard .batch-category-dropdown .dropdown-menu {
+            background: rgba(0, 0, 0, 0.85) !important;
+            border: 1px solid #ffd54f !important;
+            color: #ffffff !important;
+            z-index: 3300 !important;
+        }
+
+        #bulkCard .batch-category-dropdown .dropdown-menu li:hover {
+            background: #ffd54f !important;
+            color: #000000 !important;
+        }
+
+        @supports selector(select::picker) {
+            #bulkCard #batchCategorySelect::picker(select) {
+                background: rgba(0, 0, 0, 0.85) !important;
+                border: 1px solid #ffd54f !important;
+                color: #ffffff !important;
+                z-index: 3200;
+            }
+        }
+
+        #inventoryBody .inventory-code {
+            color: var(--text-highlight) !important;
+            font-weight: 700;
+        }
+
+        #inventoryBody .inventory-title {
+            color: var(--text-primary-contrast) !important;
+            font-weight: 700;
+        }
+
+        #inventoryBody .inventory-action i {
+            color: #fff !important;
+            transition: 0.2s;
+        }
+
+        #inventoryBody .inventory-action:hover i {
+            text-shadow: 0 0 10px rgba(255,255,255,0.55);
+        }
+        
+        .status-pill { padding: 6px 16px; border-radius: 50px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-borrowed { background: #fee2e2; color: #b91c1c; }
+        .badge-available { background: #dcfce7; color: #15803d; }
+        .badge-reserved { background: #fef3c7; color: #b45309; }
+        .badge-overdue { background: var(--danger); color: white; }
+        .badge-pending { background: var(--warning); color: white; animation: pulse 1.5s infinite; }
+        
+        .user-row-img { width: 45px; height: 45px; border-radius: 12px; object-fit: cover; border: 2px solid #f1f5f9; }
+        .category-scroll-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            padding-bottom: 6px;
+        }
+        .category-scroll-wrapper::-webkit-scrollbar { height: 6px; }
+        .category-scroll-wrapper::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 10px; }
+        .category-pill-container { display: flex; flex-wrap: nowrap; gap: 10px; min-width: max-content; }
+        .category-pill-container button,
+        .category-pill-container .cat-pill { flex: 0 0 auto; }
+        .cat-pill { white-space: nowrap; padding: 10px 24px; border-radius: 50px; background: #fff; border: 1px solid #e2e8f0; cursor: pointer; font-size: 0.85rem; font-weight: 700; transition: 0.2s; z-index: 1; flex: 0 0 auto; }
+        .cat-pill:hover { border-color: var(--accent); color: var(--accent); }
+        .cat-pill.active { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3); }
+        
+        .clock-display { font-size: 1.5rem; font-weight: 800; background: white; padding: 12px 30px; border-radius: 18px; border: 1px solid #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.03); color: var(--admin-dark); backdrop-filter: none; -webkit-backdrop-filter: none; opacity: 1; }
+        .user-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid var(--accent); transition: 0.3s; }
+        .user-avatar:hover { transform: scale(1.1); border-color: var(--success); }
+        
+        .history-item { padding: 15px; border-left: 4px solid var(--accent); background: #f8fafc; margin-bottom: 12px; border-radius: 0 12px 12px 0; font-size: 0.85rem; transition: 0.2s; }
+        .history-item:hover { background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        
+        /* Layout Toggling */
+        .view-section { display: none; }
+        .view-section.active { display: block; animation: slideDown 0.4s ease-out; }
+
+        /* Sync Utilities */
+        .sync-indicator { width: 12px; height: 12px; border-radius: 50%; display: inline-block; background: #94a3b8; margin-right: 8px; transition: 0.3s; }
+        .sync-online { background: var(--success); box-shadow: 0 0 15px var(--success); }
+
+        /* ===== HEADER STYLE ===== */
+      .main-header {
+        position: relative;
+        width: 100%;
+        background: #0d47a1;
+        overflow: hidden;
+      }
+
+      .main-header::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 60%;
+        height: 100%;
+        background: linear-gradient(135deg, #42a5f5, #1e88e5);
+        clip-path: polygon(30% 0, 100% 0, 100% 100%, 0% 100%);
+        z-index: 0;
+      }
+
+      .header-content {
+        position: relative;
+        z-index: 1;
+        padding: 20px 40px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .logo-section {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .school-logo {
+        height: 70px;
+        width: auto;
+        transition: transform 0.3s ease;
+      }
+
+      .school-logo:hover {
+        transform: scale(1.08);
+      }
+
+      .system-title h1 {
+        margin: 0;
+        font-weight: 600;
+        color: #ffffff;
+      }
+
+      /* ===== FOOTER STYLE ===== */
+      .main-footer {
+        position: relative;
+        background: #1b5e20;
+        overflow: hidden;
+        color: white;
+        padding: 25px;
+        margin-top: 60px;
+        text-align: center;
+        animation: fadeUp 0.8s ease;
+      }
+
+      .footer-purpose-link {
+        color: #60a5fa;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .footer-purpose-link:hover {
+        text-decoration: underline;
+      }
+
+      .main-footer::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 50%;
+        height: 100%;
+        background: linear-gradient(135deg, #66bb6a, #a5d6a7);
+        clip-path: polygon(40% 0, 100% 0, 100% 100%, 0% 100%);
+        z-index: 0;
+      }
+
+      .footer-content {
+        position: relative;
+        z-index: 1;
+      }
+
+      .footer-content p {
+        margin: 5px 0;
+        font-size: 14px;
+      }
+
+        @keyframes fadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(15px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (max-width: 992px) {
+            .main-wrapper.dashboard-layout {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                padding: 16px;
+            }
+
+            .main-content,
+            .dashboard-main {
+                padding: 16px;
+            }
+
+            .table-responsive,
+            .card {
+                max-width: 100%;
+            }
+        }
+
+    </style>
+</head>
+<body id="mainBody">
+<!-- LBAS System v8.0 – UI Stabilization & Structural Hardening -->
+<div id="global-dropdown-container"></div>
+<!-- ===== HEADER SECTION ===== -->
+    <header class="main-header">
+      <div class="header-content">
+        <div class="logo-section">
+            <img src="https://up.yimg.com/ib/th/id/OIP.3wZU8KYQ9wGoRl3eoloR0QHaHa?pid=Api&rs=1&c=1&qlt=95&w=114&h=114"
+                 alt="School Logo"
+                 class="school-logo">
+            <div class="system-title">
+          <h1>Library Borrowing and Assistance System</h1>
+            </div>
+        </div>
+      </div>
+    </header>
+
+<div class="main-wrapper dashboard-layout">
+<div class="sidebar">
+    <div class="text-center mb-5 mt-3">
+        <div class="bg-white rounded-4 d-inline-block p-3 mb-3 shadow-lg" style="opacity: 0.9;">
+            <i class="fas fa-server text-primary fa-2x"></i>
+        </div>
+        <h4 class="fw-black text-white mb-0 tracking-tight">LBAS CORE</h4>
+        <span class="badge bg-primary text-white small mt-2 px-3 py-1 rounded-pill">System V7.2 Beta</span>
+    </div>
+    
+    <nav class="nav flex-column gap-2">
+        <a class="nav-link text-white active" id="linkConsole" onclick="switchView('console')">
+            <span><i class="fas fa-laptop-code me-3"></i>Dashboard</span>
+        </a>
+        <a class="nav-link text-white-50" id="linkRequests" onclick="switchView('requests')">
+            <span><i class="fas fa-user-clock me-3"></i>Access Requests</span>
+            <span id="pendingBadge" class="badge bg-danger rounded-pill" style="display:none">0</span>
+        </a>
+        <a class="nav-link text-white-50" id="linkUsers" onclick="switchView('users')">
+            <span><i class="fas fa-users-cog me-3"></i>User Directory</span>
+        </a>
+        <a class="nav-link text-white-50" id="linkInventory" onclick="switchView('inventory')">
+            <span><i class="fas fa-book-reader me-3"></i>Inventory</span>
+        </a>
+        <a class="nav-link text-white-50" id="linkLeaderboard" style="display:none;" onclick="switchView('leaderboard')">
+            <span><i class="fas fa-trophy me-3"></i>Leaderboard</span>
+        </a>
+    </nav>
+
+    <div class="mt-auto mb-4">
+        <div id="authStatusBadge" class="alert alert-dark border-0 small text-center fw-bold opacity-75 rounded-4">
+            <i class="fas fa-shield-alt me-2"></i>SECURE MODE
+        </div>
+        <small class="text-white-50 d-block text-center mt-2" style="font-size: 0.7rem;">IP: 10.34.153.190 (Plan A)</small>
+    </div>
+</div>
+
+<div class="main-content dashboard-main content">
+    <header class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h2 class="fw-bold mb-1" id="viewTitle">Dashboard</h2>
+            <p class="text-muted mb-0 fw-medium"><span id="syncDot" class="sync-indicator"></span> System Status: <span id="systemStateText">Online</span></p>
+        </div>
+        <div class="d-flex align-items-center gap-4">
+            <div id="liveClock" class="clock-display font-monospace">00:00:00</div>
+            <div class="admin-profile-trigger" id="adminProfileTrigger" onclick="toggleAdminCard(event)">
+                <img id="headerAvatar" src="/Profile/default.png" class="user-avatar shadow-sm">
+            </div>
+        </div>
+    </header>
+    <div class="side-down-card account-dropdown shadow-lg" id="adminFloatCard" onclick="event.stopPropagation()">
+        <div id="loginForm">
+            <div class="text-center mb-4">
+                <h5 class="fw-bold text-dark"><i class="fas fa-fingerprint text-primary me-2"></i>Staff Authorization</h5>
+                <p class="small text-muted">Identify yourself to unlock controls</p>
+            </div>
+            <div class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-0"><i class="fas fa-id-card text-muted"></i></span>
+                    <input type="text" id="loginUser" class="form-control bg-light border-0 py-2" placeholder="Admin ID">
+                </div>
+            </div>
+            <div class="mb-4">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-0"><i class="fas fa-key text-muted"></i></span>
+                    <input type="password" id="loginPass" class="form-control bg-light border-0 py-2" placeholder="Secure Phrase">
+                </div>
+            </div>
+            <button class="btn btn-primary w-100 fw-bold py-3 rounded-3 shadow-sm transition-all" onclick="attemptLogin()">AUTHENTICATE SESSION</button>
+            <div id="loginError" class="alert alert-danger mt-3 small py-2 fw-bold text-center" style="display:none;">
+                <i class="fas fa-exclamation-triangle me-2"></i>Access Denied
+            </div>
+        </div>
+
+        <div id="adminProfile" style="display: none;">
+            <div class="text-center mb-4">
+                <img id="activeAdminPhoto" src="/Profile/default.png" class="rounded-circle border border-4 border-primary mb-3 shadow-sm" style="width: 90px; height: 90px; object-fit: cover;">
+                <h5 class="fw-bold mb-1 text-dark" id="activeAdminName">Librarian</h5>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 rounded-pill" id="activeAdminRole">HEAD LIBRARIAN</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="small fw-bold text-uppercase text-muted"><i class="fas fa-history me-1"></i> Audit Log</span>
+                <button class="btn btn-link btn-sm text-danger p-0 text-decoration-none fw-bold" onclick="clearHistory()">Clear All</button>
+            </div>
+            <div id="adminActionLog" class="mb-3" style="max-height: 180px; overflow-y: auto; padding-right: 5px;"></div>
+            <button class="btn btn-outline-danger w-100 fw-bold py-2 rounded-3 mt-2" onclick="logout()">
+                <i class="fas fa-sign-out-alt me-2"></i>Log Out
+            </button>
+        </div>
+    </div>
+
+    <div id="consoleView" class="view-section active">
+        <div class="row g-4">
+            <div class="col-xl-4">
+                <div class="card glass-card p-4 h-100 border-top border-4 border-success position-relative" id="enrollCard">
+                    <div class="control-lock-overlay">
+                        <i class="fas fa-user-lock lock-icon"></i>
+                        <h5 class="fw-bold text-white">Manual Override</h5>
+                        <p class="text-white-50 small">Log in to create users manually</p>
+                    </div>
+                    <h5 class="fw-bold mb-4"><i class="fas fa-user-plus text-success me-2"></i>Quick Register</h5>
+                    <div class="btn-group w-100 mb-4 shadow-sm">
+                        <button class="btn btn-outline-success active fw-bold" id="btnStudent" onclick="setRole('student')">Student</button>
+                        <button class="btn btn-outline-success fw-bold" id="btnAdmin" onclick="setRole('admin')">Staff</button>
+                    </div>
+                    <div class="mb-3"><input type="text" id="regName" class="form-control bg-light" placeholder="Full Name"></div>
+                    <div class="mb-3"><input type="text" id="regID" class="form-control bg-light" placeholder="Unique ID Number"></div>
+                    <div class="mb-3"><input type="password" id="regPass" class="form-control bg-light" placeholder="Assign Password"></div>
+                    <div class="mb-4">
+                        <label class="small text-muted fw-bold ms-1">Identity Photo</label>
+                        <input type="file" id="regPhoto" class="form-control mt-1">
+                    </div>
+                    <button class="btn btn-success w-100 fw-bold py-2 shadow-sm" onclick="submitUser()">CREATE DATABASE ENTRY</button>
+                </div>
+            </div>
+
+            <div class="col-xl-8">
+                <div class="card glass-card p-4 h-100 border-top border-4 border-primary position-relative" id="bulkCard">
+                    <div class="control-lock-overlay"><i class="fas fa-database lock-icon"></i><p class="fw-bold text-white">Restricted Access</p></div>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="fw-bold mb-0"><i class="fas fa-file-import text-primary me-2"></i>Batch Asset Import</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="wipeCheck">
+                            <label class="form-check-label small text-danger fw-bold" for="wipeCheck">Wipe Existing Data</label>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2 mb-3 batch-category-dropdown">
+                        <select id="batchCategorySelect" class="form-select fw-bold text-muted batch-category-dropdown">
+                            <option value="General">Target: General Collection</option>
+                            <option value="Mathematics">Target: Mathematics</option>
+                            <option value="Science">Target: Science & Tech</option>
+                            <option value="Literature">Target: Literature</option>
+                        </select>
+                        <button class="btn btn-outline-secondary fw-bold" type="button" onclick="addCustomCategory()">
+                            <i class="fas fa-plus"></i> New
+                        </button>
+                    </div>
+                    <button class="btn btn-sm btn-danger mt-2" type="button" onclick="confirmDeleteCategoryFromDropdown()">
+                        Delete Selected Category
+                    </button>
+                    
+                    <textarea id="bulkArea" class="form-control font-monospace mb-4 bg-light" rows="6" placeholder="Instructions:&#10;Paste book list here. The selected category above applies to ALL items unless specified.&#10;&#10;Supported Formats:&#10;CODE | Title&#10;CODE, Title&#10;CODE Title&#10;&#10;Examples:&#10;MAT101, Advanced Algebra&#10;SCI202 Biology Basics"></textarea>
+                    <button class="btn btn-primary w-100 fw-bold py-2 shadow-sm" onclick="submitBulk()">EXECUTE BATCH SYNC</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card glass-card mt-4 border-0 shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center p-3">
+                <span class="fw-bold small mt-1"><i class="fas fa-broadcast-tower text-danger me-2 animate-pulse"></i>ACTIVE TRAFFIC MONITOR</span>
+                <button class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="loadData()">Refresh Stream</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-muted">
+                        <tr class="small text-uppercase">
+                            <th class="ps-4">Status</th><th>Book Code</th><th>Borrowed By</th><th>Timer</th><th class="text-end pe-4">Menu</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monitorBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="requestsView" class="view-section">
+        <div class="card glass-card p-4 border-top border-4 border-warning">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-user-clock text-warning me-2"></i>Registration Queue</h5>
+                    <p class="small text-muted mb-0">Review and approve student access requests</p>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm" onclick="loadData()"><i class="fas fa-sync-alt me-2"></i>Check Updates</button>
+            </div>
+            <div class="alert alert-warning border-0 d-flex align-items-center mb-4 rounded-3">
+                <i class="fas fa-info-circle fa-2x me-3 opacity-50"></i>
+                <div>
+                    <h6 class="fw-bold mb-0">Approval Required</h6>
+                    <small>Users in this list cannot log in to LBAS until you click "Approve".</small>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="bg-light text-secondary">
+                        <tr class="small text-uppercase">
+                            <th class="ps-4">Identity</th>
+                            <th>School ID</th>
+                            <th>Full Name</th>
+                            <th>Status</th>
+                            <th class="text-end pe-4">Decision</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requestsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="usersView" class="view-section">
+        <div class="card glass-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h5 class="fw-bold mb-0"><i class="fas fa-database text-primary me-2"></i>Master User Database</h5>
+                    <p class="small text-muted mb-0">Manage active student and staff accounts</p>
+                </div>
+                <div class="d-flex gap-2 w-50 justify-content-end">
+                    <select id="userTypeFilter" class="form-select w-25 bg-light border-0 fw-bold" onchange="renderUsersList()">
+                        <option value="all">All Active</option>
+                        <option value="student">Students</option>
+                        <option value="admin">Admins</option>
+                    </select>
+                    <input type="text" id="userSearch" class="form-control w-50 bg-light border-0" placeholder="Search database..." onkeyup="renderUsersList()">
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="bg-light text-muted">
+                        <tr class="small text-uppercase">
+                            <th class="ps-4">Profile</th>
+                            <th>ID Number</th>
+                            <th>Full Name</th>
+                            <th>Privileges</th>
+                            <th>Current State</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersListBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="inventoryView" class="view-section">
+        <div class="card glass-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold"><i class="fas fa-boxes text-success me-2"></i>Inventory Control</h5>
+                <input type="text" id="inventorySearch" class="form-control w-25 bg-light border-0" placeholder="Scan or type code..." onkeyup="filterInventory()">
+            </div>
+            <div class="category-scroll-wrapper mb-4">
+                <div class="category-pill-container" id="categoryPillContainer">
+                    <div class="cat-pill active" onclick="setCategoryFilter('All', this)">All Collections</div>
+                </div>
+            </div>
+            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                <table class="table table-hover align-middle">
+                    <thead class="bg-light sticky-top">
+                        <tr class="small text-uppercase">
+                            <th class="ps-4">Book No.</th><th>Asset Details</th><th>Availability</th><th class="text-end pe-4">Modify</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Admin Leaderboard View -->
+    <div id="leaderboardView" class="view-section">
+        <div class="card glass-card p-4 mb-4">
+            <h5 class="fw-bold"><i class="fas fa-users text-primary me-2"></i>Top Borrowers This Month</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="bg-light"><tr class="small text-uppercase"><th class="ps-4">Rank</th><th>Borrower</th><th>Total Borrowed</th></tr></thead>
+                    <tbody id="topBorrowersBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card glass-card p-4">
+            <h5 class="fw-bold"><i class="fas fa-book text-success me-2"></i>Top Books This Month</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="bg-light"><tr class="small text-uppercase"><th class="ps-4">Rank</th><th>Book No.</th><th>Total Borrowed</th></tr></thead>
+                    <tbody id="topBooksBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="leaderboardProfileModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="fw-bold"><i class="fas fa-id-card text-primary me-2"></i>Borrower Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="card border-0 bg-light rounded-4">
+                    <div class="card-body text-center">
+                        <img id="leaderboardProfilePhoto" src="/Profile/default.png" class="rounded-circle shadow-sm mb-3" style="width:90px;height:90px;object-fit:cover;" alt="Profile">
+                        <h5 id="leaderboardProfileName" class="fw-bold mb-1">-</h5>
+                        <div id="leaderboardProfileId" class="text-muted small mb-3">ID: -</div>
+                        <div class="d-flex justify-content-between small"><span class="text-muted">Total borrowed this month</span><span id="leaderboardProfileTotal" class="fw-bold">0</span></div>
+                        <div class="d-flex justify-content-between small mt-2"><span class="text-muted">Most borrowed book</span><span id="leaderboardProfileBook" class="fw-bold text-end">No records</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+
+<div class="modal fade" id="transactionDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="fw-bold mb-0" id="transactionModalTitle">Transaction Info</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="transactionModalBody" class="small text-muted"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+            <div class="modal-header border-0 pb-0 bg-light">
+                <h5 class="fw-bold p-3"><i class="fas fa-edit text-primary me-2"></i>Modify Record</h5>
+                <button type="button" class="btn-close m-3" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-white">
+                <input type="hidden" id="editType">
+                <div class="mb-3">
+                    <label class="small fw-bold text-muted mb-1">Unique Identifier (Locked)</label>
+                    <input type="text" id="editID" class="form-control bg-light fw-bold text-dark" readonly>
+                </div>
+                <div class="mb-4">
+                    <label class="small fw-bold text-muted mb-1">Display Name / Title</label>
+                    <input type="text" id="editName" class="form-control fw-bold">
+                </div>
+                <div id="bookOnlyFields" style="display:none;">
+                    <div class="mb-3">
+                        <label class="small fw-bold text-muted mb-1">Collection Category</label>
+                        <select id="editCategory" class="form-select">
+                            <option value="General">General</option>
+                            <option value="Mathematics">Mathematics</option>
+                            <option value="Science">Science</option>
+                            <option value="Literature">Literature</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-primary w-100 fw-bold mt-2 py-2 rounded-3 shadow-sm" onclick="saveEdits()">SAVE CHANGES</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteCategoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="fw-bold">Delete Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="mb-2">Are you sure you want to delete this category?</p>
+                <p class="small text-danger mb-0">This will permanently delete ALL books registered under this category.</p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="executeCategoryDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let currentRole = 'student', 
+        masterBooks = [], 
+        masterUsers = [],
+        masterAdmins = [],
+        masterTransactions = [],
+        pendingRequests = [],
+        adminHistory = JSON.parse(localStorage.getItem('adminHistory') || '[]'), 
+        isStaff = false, 
+        activeFilterCat = 'All',
+        categoryToDelete = null,
+        staffSessionID = localStorage.getItem('adminSchoolId') || '',
+        staffSessionToken = localStorage.getItem('adminToken') || '';
+
+    function getAuthHeaders() {
+        const token = staffSessionToken || localStorage.getItem('adminToken') || '';
+        return token ? { Authorization: token } : {};
+    }
+
+    const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+    const leaderboardProfileModal = new bootstrap.Modal(document.getElementById('leaderboardProfileModal'));
+    const transactionDetailModal = new bootstrap.Modal(document.getElementById('transactionDetailModal'));
+
+    window.onload = () => {
+        mountAdminDropdown();
+        if(localStorage.getItem('isStaffAuth') === 'true') {
+            executeUnlock(localStorage.getItem('adminName'), localStorage.getItem('adminPhoto'), localStorage.getItem('adminSchoolId'), localStorage.getItem('adminToken'));
+        }
+        loadData(true);
+        setInterval(() => { document.getElementById('liveClock').innerText = new Date().toLocaleTimeString(); }, 1000);
+        setInterval(() => {
+            loadData(false);
+        }, 10000);
+    };
+
+    async function loadData(resetFilter = false) {
+        try {
+            const preservedFilterCat = activeFilterCat;
+            const authHeaders = getAuthHeaders();
+            const [bRes, uRes, aRes, tRes] = await Promise.all([
+                fetch('/api/books', { headers: authHeaders }),
+                fetch('/api/users', { headers: authHeaders }), 
+                fetch('/api/admins', { headers: authHeaders }),
+                fetch('/api/transactions', { headers: authHeaders })
+            ]);
+
+            if ([bRes, uRes, aRes, tRes].some(res => !res.ok)) {
+                throw new Error('Unauthorized or failed API request');
+            }
+            
+            masterBooks = await bRes.json();
+            const allUsers = await uRes.json();
+            masterAdmins = await aRes.json();
+            masterTransactions = await tRes.json();
+
+            if (!Array.isArray(masterBooks)) masterBooks = [];
+            if (!Array.isArray(masterAdmins)) masterAdmins = [];
+            if (!Array.isArray(masterTransactions)) masterTransactions = [];
+            const normalizedUsers = Array.isArray(allUsers) ? allUsers : [];
+            
+            masterUsers = normalizedUsers.filter(u => u.status !== 'pending');
+            pendingRequests = normalizedUsers.filter(u => u.status === 'pending');
+
+            document.getElementById('syncDot').classList.add('sync-online');
+            document.getElementById('systemStateText').innerText = "Live & Synced";
+            
+            updatePendingBadge();
+            activeFilterCat = resetFilter ? 'All' : preservedFilterCat;
+            renderCategoryPills();
+            filterInventory(); // Re-apply active category/search filters to fresh data
+            syncMonitor();
+            renderUsersList();
+            renderRequestsList();
+            renderAdminHistory();
+            
+        } catch(e) { 
+            console.error("Data Sync Failed", e); 
+            document.getElementById('syncDot').classList.remove('sync-online');
+            document.getElementById('systemStateText').innerText = "Connection Lost";
+        }
+    }
+
+    // --- DYNAMIC CATEGORIES (NEW FEATURE) ---
+    function renderCategoryPills() {
+        // Extract unique categories from loaded books
+        const uniqueCats = [...new Set(masterBooks.map(b => b.category))].sort();
+        // Add default ones if missing to keep UI consistent
+        const defaults = ['General', 'Mathematics', 'Science', 'Literature'];
+        defaults.forEach(d => { if(!uniqueCats.includes(d)) uniqueCats.push(d); });
+        
+        const container = document.getElementById('categoryPillContainer');
+        // Preserve "All" pill
+        let html = `<div class="cat-pill ${activeFilterCat==='All'?'active':''}" onclick="setCategoryFilter('All', this)">All Collections</div>`;
+        
+        uniqueCats.forEach(cat => {
+            const safeCat = String(cat).replace(/'/g, "\\'");
+            html += `<div class="cat-pill ${activeFilterCat===cat?'active':''}" onclick="setCategoryFilter('${safeCat}', this)">${cat}</div>`;
+        });
+        container.innerHTML = html;
+        
+        // Also update the dropdowns (Bulk & Edit)
+        updateDropdowns(uniqueCats);
+    }
+
+    function updateDropdowns(categories) {
+        const bulkSel = document.getElementById('batchCategorySelect');
+        const editSel = document.getElementById('editCategory');
+
+        const currentBulk = bulkSel.value;
+        bulkSel.innerHTML = categories.map(c => `<option value="${c}">Target: ${c}</option>`).join('');
+        bulkSel.value = categories.includes(currentBulk) ? currentBulk : (categories[0] || 'General');
+
+        const currentEdit = editSel.value;
+        editSel.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        editSel.value = categories.includes(currentEdit) ? currentEdit : (categories[0] || 'General');
+    }
+
+    function addCustomCategory() {
+        const newCat = prompt("Enter Name for New Category:");
+        if(newCat && newCat.trim() !== "") {
+            const clean = newCat.trim();
+            // Add to dropdown immediately for use
+            const bulkSel = document.getElementById('batchCategorySelect');
+            const opt = document.createElement("option");
+            opt.value = clean;
+            opt.text = "Target: " + clean;
+            bulkSel.add(opt);
+            bulkSel.value = clean; // Select it automatically
+            alert(`Category "${clean}" created. You can now import books into it.`);
+        }
+    }
+
+    function confirmDeleteCategoryFromDropdown(){
+        const select = document.getElementById('batchCategorySelect');
+        const selectedCategory = select.value;
+
+        if(!selectedCategory || selectedCategory === 'All'){
+            alert('This category cannot be deleted.');
+            return;
+        }
+
+        categoryToDelete = selectedCategory;
+        const modal = new bootstrap.Modal(
+            document.getElementById('deleteCategoryModal')
+        );
+        modal.show();
+    }
+
+    async function executeCategoryDelete(){
+        if(!categoryToDelete) return;
+
+        const res = await fetch('/api/delete_category',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({category:categoryToDelete})
+        });
+
+        const data = await res.json();
+
+        if(data.success){
+            activeFilterCat = 'All';
+            loadData(true);
+        } else {
+            alert('Delete failed.');
+        }
+
+        const modal = bootstrap.Modal.getInstance(document.getElementById('deleteCategoryModal'));
+        if (modal) modal.hide();
+        categoryToDelete = null;
+    }
+
+    // --- BULK REGISTER (FIXED) ---
+    async function submitBulk() {
+        const text = document.getElementById('bulkArea').value;
+        if(!text.trim()) return alert("Please enter book data.");
+
+        const res = await fetch('/api/bulk_register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                text: text,
+                category: document.getElementById('batchCategorySelect').value,
+                clear_first: document.getElementById('wipeCheck').checked
+            })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
+            // Handle both legacy and new backend keys
+            const count = data.items_added || data.added || 0;
+            addHistory(`Bulk Import: ${count} books added`);
+            alert(`Success! ${count} books registered.`);
+            loadData(); // Force refresh
+            document.getElementById('bulkArea').value = ''; // Clear input
+        } else {
+            alert("Error: " + (data.message || "Import failed. Check console."));
+        }
+    }
+
+    // --- STANDARD UI LOGIC (RETAINED) ---
+    function updatePendingBadge() {
+        const badge = document.getElementById('pendingBadge');
+        if(pendingRequests.length > 0) {
+            badge.innerText = pendingRequests.length;
+            badge.style.display = 'inline-block';
+            badge.classList.add('animate-pulse');
+        } else { badge.style.display = 'none'; }
+    }
+
+    function switchView(view) {
+        document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active', 'text-white'));
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.add('text-white-50'));
+
+        const linkMap = {
+            'console': { id: 'linkConsole', title: 'Command Dashboard' },
+            'requests': { id: 'linkRequests', title: 'Registration Queue' },
+            'users': { id: 'linkUsers', title: 'User Directory' },
+            'inventory': { id: 'linkInventory', title: 'Inventory Manager' },
+            'leaderboard': { id: 'linkLeaderboard', title: 'Monthly Leaderboards' }
+        };
+
+        const target = linkMap[view];
+        if(view === 'leaderboard' && !isStaff) {
+            alert('Security Lock Active');
+            return;
+        }
+        if(target) {
+            document.getElementById(view + 'View').classList.add('active');
+            const link = document.getElementById(target.id);
+            link.classList.add('active', 'text-white');
+            link.classList.remove('text-white-50');
+            document.getElementById('viewTitle').innerText = target.title;
+        }
+        if(view === 'requests') renderRequestsList();
+        if(view === 'leaderboard') loadAdminLeaderboards();
+    }
+
+    function renderRequestsList() {
+        const tbody = document.getElementById('requestsBody');
+        tbody.innerHTML = pendingRequests.map(u => `
+            <tr>
+                <td class="ps-4"><img src="/Profile/${u.photo || 'default.png'}" class="user-row-img shadow-sm"></td>
+                <td><code class="fw-bold text-dark">${u.school_id}</code></td>
+                <td class="fw-bold">${u.name}</td>
+                <td><span class="badge badge-pending">PENDING</span></td>
+                <td class="text-end pe-4">
+                    <button class="btn btn-sm btn-success me-2 fw-bold px-3" onclick="decideRequest('${u.school_id}', 'approve')">Approve</button>
+                    <button class="btn btn-sm btn-outline-danger fw-bold px-3" onclick="decideRequest('${u.school_id}', 'reject')">Reject</button>
+                </td>
+            </tr>
+        `).join('') || '<tr><td colspan="5" class="text-center py-5 text-muted fw-bold">No pending registrations.</td></tr>';
+    }
+
+    async function decideRequest(id, action) {
+        if(!isStaff) return alert("Security Lock Active");
+        if(!confirm(`Confirm ${action.toUpperCase()}?`)) return;
+        // Note: Ensure /api/approve_user exists in backend, otherwise this will fail silently
+        const endpoint = action === 'approve' ? '/api/approve_user' : '/api/reject_user';
+        try {
+            const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ school_id: id }) });
+            if((await res.json()).success) { loadData(); }
+        } catch(e) {}
+    }
+
+    function renderUsersList() {
+        const query = document.getElementById('userSearch').value.toLowerCase();
+        const typeFilter = document.getElementById('userTypeFilter').value;
+        const tbody = document.getElementById('usersListBody');
+        let combined = [...masterUsers.map(u => ({...u, type: 'student'})), ...masterAdmins.map(a => ({...a, type: 'admin'}))];
+        const filtered = combined.filter(u => (u.name.toLowerCase().includes(query) || u.school_id.includes(query)) && (typeFilter === 'all' || u.type === typeFilter));
+
+        tbody.innerHTML = filtered.map(u => `
+            <tr>
+                <td class="ps-4"><img src="/Profile/${u.photo || 'default.png'}" class="user-row-img shadow-sm"></td>
+                <td><code class="fw-bold text-dark">${u.school_id}</code></td>
+                <td class="fw-bold">${u.name}</td>
+                <td><span class="badge ${u.type === 'admin' ? 'bg-danger' : 'bg-primary'}">${u.type.toUpperCase()}</span></td>
+                <td><span class="status-pill badge-available">Active</span></td>
+                <td class="text-end pe-4">${isStaff ? `<button class="btn btn-sm btn-light border" onclick="deleteRecord('user', '${u.school_id}', '${u.type}')"><i class="fas fa-trash text-danger"></i></button>` : '<i class="fas fa-lock text-muted"></i>'}</td>
+            </tr>`).join('') || '<tr><td colspan="6" class="text-center py-5 text-muted">No records found.</td></tr>';
+    }
+
+    function renderInventory(data) {
+        const tbody = document.getElementById('inventoryBody');
+        tbody.innerHTML = data.map(b => `
+            <tr>
+                <td width="150" class="ps-4"><code class="inventory-code">${b.book_no}</code></td>
+                <td><div class="inventory-title">${b.title}</div><div class="small text-muted text-uppercase fw-bold" style="font-size:0.65rem">${b.category}</div></td>
+                <td><span class="status-pill badge-${b.status.toLowerCase()}">${b.status}</span></td>
+                <td class="text-end pe-4">${isStaff ? `<button class="btn btn-sm btn-light border me-1 inventory-action" onclick="openEdit('book', '${b.book_no}', '${b.title}', '${b.category}')"><i class="fas fa-pen"></i></button> <button class="btn btn-sm btn-light border inventory-action" onclick="deleteRecord('book', '${b.book_no}')"><i class="fas fa-trash"></i></button>` : ''}</td>
+            </tr>`).join('');
+    }
+
+    function openEdit(type, id, name, extra) {
+        document.getElementById('editType').value = type;
+        document.getElementById('editID').value = id;
+        document.getElementById('editName').value = name;
+        const bookFields = document.getElementById('bookOnlyFields');
+        if(type === 'book') {
+            bookFields.style.display = 'block';
+            document.getElementById('editCategory').value = extra;
+        } else {
+            bookFields.style.display = 'none';
+            document.getElementById('editID').dataset.role = extra;
+        }
+        editModal.show();
+    }
+
+    async function saveEdits() {
+        const type = document.getElementById('editType').value;
+        const id = document.getElementById('editID').value;
+        const name = document.getElementById('editName').value;
+        let endpoint = type === 'book' ? '/api/update_book' : '/api/update_member';
+        let payload = type === 'book' ? { book_no: id, title: name, category: document.getElementById('editCategory').value } : { school_id: id, name: name, type: document.getElementById('editID').dataset.role };
+        const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        if((await res.json()).success) { editModal.hide(); addHistory(`Updated ${type}: ${id}`); loadData(); }
+    }
+
+    async function deleteRecord(type, id, role = '') {
+        if(!confirm(`Delete ${type} ${id}?`)) return;
+        let endpoint = type === 'book' ? '/api/delete_book' : '/api/delete_member';
+        let payload = type === 'book' ? { book_no: id } : { school_id: id, type: role };
+        const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        if((await res.json()).success) { addHistory(`Deleted ${type}: ${id}`); loadData(); }
+    }
+
+    async function attemptLogin() {
+        const u = document.getElementById('loginUser').value;
+        const p = document.getElementById('loginPass').value;
+        try {
+            const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ school_id: u, password: p }) });
+            const data = await res.json();
+            if(data.success && data.profile.is_staff) {
+                localStorage.setItem('isStaffAuth', 'true');
+                localStorage.setItem('adminName', data.profile.name);
+                localStorage.setItem('adminPhoto', data.profile.photo);
+                localStorage.setItem('adminSchoolId', data.profile.school_id || u);
+                localStorage.setItem('adminToken', data.token || '');
+                executeUnlock(data.profile.name, data.profile.photo, data.profile.school_id || u, data.token || '');
+            } else { showLoginError(); }
+        } catch (e) { showLoginError(); }
+    }
+
+    function executeUnlock(name, photo, schoolId = '', token = '') {
+        isStaff = true;
+        staffSessionID = (schoolId || localStorage.getItem('adminSchoolId') || '').toLowerCase();
+        staffSessionToken = token || localStorage.getItem('adminToken') || '';
+        document.getElementById('mainBody').classList.add('is-unlocked');
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('adminProfile').style.display = 'block';
+        document.getElementById('activeAdminName').innerText = name;
+        document.getElementById('headerAvatar').src = `/Profile/${photo}`;
+        document.getElementById('activeAdminPhoto').src = `/Profile/${photo}`;
+        document.getElementById('authStatusBadge').className = "alert alert-success py-2 small fw-bold text-center border-0 shadow-sm rounded-4";
+        document.getElementById('authStatusBadge').innerHTML = '<i class="fas fa-check-circle me-2"></i>AUTHORIZED';
+        const link = document.getElementById('linkLeaderboard');
+        if (link) link.style.display = 'block';
+        addHistory(`System Unlocked by: ${name}`);
+        loadData(true);
+    }
+
+    async function submitUser() {
+        if(!isStaff) return alert("System Locked");
+        const fd = new FormData();
+        fd.append('name', document.getElementById('regName').value);
+        fd.append('school_id', document.getElementById('regID').value);
+        fd.append('password', document.getElementById('regPass').value);
+        const photo = document.getElementById('regPhoto').files[0];
+        if(photo) fd.append('photo', photo);
+        const endpoint = (currentRole === 'admin') ? '/api/register_librarian' : '/api/register_student';
+        const res = await fetch(endpoint, { method: 'POST', body: fd });
+        if((await res.json()).success) { addHistory(`Manual Register: ${document.getElementById('regID').value}`); alert("User Added"); loadData(); }
+    }
+
+    function findMemberById(schoolId) {
+        const sid = String(schoolId || '').toLowerCase();
+        return [...masterUsers, ...masterAdmins].find(u => String(u.school_id || '').toLowerCase() === sid) || null;
+    }
+
+    function showTransactionInfo(bookNo) {
+        const transaction = masterTransactions.find(t => t.book_no === bookNo && (t.status === 'Borrowed' || t.status === 'Reserved'));
+        if (!transaction) return;
+        const member = findMemberById(transaction.school_id) || {};
+        document.getElementById('transactionModalTitle').innerText = 'Reservation Info';
+        document.getElementById('transactionModalBody').innerHTML = `
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <img src="/Profile/${member.photo || 'default.png'}" class="rounded-circle" style="width:58px;height:58px;object-fit:cover;" alt="profile">
+                <div>
+                    <div class="fw-bold text-dark">${member.name || transaction.borrower_name || transaction.school_id}</div>
+                    <div class="small text-muted">ID: ${transaction.school_id || '-'}</div>
+                </div>
+            </div>
+            <div class="border rounded-3 p-3 bg-light">
+                <div><span class="fw-bold text-dark">Book No:</span> <code>${transaction.book_no || '-'}</code></div>
+                <div class="mt-1"><span class="fw-bold text-dark">Title:</span> ${transaction.title || 'Unknown Title'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Pickup Location:</span> ${transaction.pickup_location || 'Not specified'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Note:</span> ${transaction.reservation_note || 'N/A'}</div>
+            </div>`;
+        transactionDetailModal.show();
+    }
+
+    function showBorrowedInfo(bookNo) {
+        const transaction = masterTransactions.find(t => t.book_no === bookNo && t.status === 'Borrowed');
+        if (!transaction) {
+            alert('Borrowed details are available once the reservation is converted to Borrowed.');
+            return;
+        }
+        document.getElementById('transactionModalTitle').innerText = 'Borrowed Schedule';
+        document.getElementById('transactionModalBody').innerHTML = `
+            <div class="border rounded-3 p-3 bg-light">
+                <div><span class="fw-bold text-dark">Book:</span> <code>${transaction.book_no || '-'}</code> - ${transaction.title || 'Unknown Title'}</div>
+                <div class="mt-2"><span class="fw-bold text-dark">Borrowed Date:</span> ${transaction.date || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Return Due Date:</span> ${transaction.expiry || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Reserved At:</span> ${transaction.reserved_at || transaction.date || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Reservation Countdown (legacy):</span> 30 minutes</div>
+            </div>`;
+        transactionDetailModal.show();
+    }
+
+    async function syncMonitor() {
+        const active = masterTransactions.filter(t => t.status === 'Borrowed' || t.status === 'Reserved');
+        document.getElementById('monitorBody').innerHTML = active.map(t => `<tr><td class="ps-4"><span class="status-pill badge-${t.status.toLowerCase()}">${t.status}</span></td><td><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.school_id}</td><td>${t.status === 'Reserved' ? '<span class="small text-warning fw-bold">Awaiting pickup</span>' : `<span class="timer font-monospace fw-bold text-primary" data-expiry="${t.expiry || ''}">...</span>`}</td><td class="text-end pe-4">${isStaff ? `<div class="dropdown d-inline-block"><button class="btn btn-sm btn-light border rounded-circle" data-bs-toggle="dropdown"><i class="fas fa-ellipsis-v"></i></button><ul class="dropdown-menu dropdown-menu-end shadow"><li><button class="dropdown-item" onclick="showTransactionInfo('${t.book_no}')">Info</button></li><li><button class="dropdown-item" onclick="showBorrowedInfo('${t.book_no}')">Borrowed</button></li><li><hr class="dropdown-divider"></li><li><button class="dropdown-item text-danger" onclick="releaseAsset('${t.book_no}')">Release</button></li></ul></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`).join('') || '<tr><td colspan="5" class="text-center py-4 text-muted">No active transactions.</td></tr>';
+        updateTimers();
+    }
+
+
+    // --- NEW: Leaderboard API rendering (independent from inventory refresh) ---
+    async function loadAdminLeaderboards() {
+        if (!isStaff) return;
+        try {
+            const leaderboardRes = await fetch('/api/monthly_leaderboard');
+            const leaderboard = await leaderboardRes.json();
+            const borrowers = leaderboard.top_borrowers || [];
+            const books = leaderboard.top_books || [];
+
+            document.getElementById('topBorrowersBody').innerHTML = borrowers.map((r, i) => `
+                <tr role="button" onclick="openLeaderboardProfile('${r.school_id}')">
+                    <td class="ps-4 fw-bold">#${r.rank || i + 1}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <img src="/Profile/${r.photo || 'default.png'}" class="rounded-circle" style="width:36px;height:36px;object-fit:cover;" alt="${r.name}">
+                            <div>
+                                <div class="fw-bold">${r.name || r.school_id}</div>
+                                <div class="small text-muted">${r.school_id}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${r.total_borrowed}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="3" class="text-center text-muted py-4">No borrower data this month.</td></tr>';
+
+            document.getElementById('topBooksBody').innerHTML = books.length > 0
+                ? books.map((r, i) => `<tr><td class="ps-4 fw-bold">#${r.rank || i + 1}</td><td><code>${r.book_no}</code></td><td>${r.total_borrowed}</td></tr>`).join('')
+                : '<tr><td colspan="3" class="text-center text-muted py-4">No book data this month.</td></tr>';
+        } catch (e) {
+            document.getElementById('topBorrowersBody').innerHTML = '<tr><td colspan="3" class="text-center text-danger py-4">Failed to load borrowers leaderboard.</td></tr>';
+            document.getElementById('topBooksBody').innerHTML = '<tr><td colspan="3" class="text-center text-danger py-4">Failed to load books leaderboard.</td></tr>';
+        }
+    }
+
+    async function openLeaderboardProfile(id) {
+        try {
+            const res = await fetch('/api/leaderboard_profile/' + encodeURIComponent(id));
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.message || 'Unable to load profile.');
+
+            const p = data.profile;
+            document.getElementById('leaderboardProfilePhoto').src = `/Profile/${p.photo || 'default.png'}`;
+            document.getElementById('leaderboardProfileName').innerText = p.name || p.school_id;
+            document.getElementById('leaderboardProfileId').innerText = `ID: ${p.school_id || '-'}`;
+            document.getElementById('leaderboardProfileTotal').innerText = p.total_borrowed ?? 0;
+            document.getElementById('leaderboardProfileBook').innerText = p.most_borrowed_book || 'No records';
+            leaderboardProfileModal.show();
+        } catch (e) {
+            alert('Failed to load leaderboard profile.');
+        }
+    }
+
+    async function releaseAsset(b_no) {
+        if(!confirm("Return " + b_no + "?")) return;
+        const res = await fetch('/api/process_transaction', { method: 'POST', headers: {'Content-Type': 'application/json', ...getAuthHeaders()}, body: JSON.stringify({ book_no: b_no, action: 'return' }) });
+        if((await res.json()).success) { addHistory(`Returned Book: ${b_no}`); loadData(); }
+    }
+
+    function updateTimers() {
+        document.querySelectorAll('.timer').forEach(el => {
+            if(!el.dataset.expiry){ el.innerText = 'Awaiting pickup'; return; }
+            const diff = new Date(el.dataset.expiry) - new Date();
+            el.innerText = diff <= 0 ? "OVERDUE" : `${Math.floor(diff / 60000)}m ${Math.floor((diff % 60000) / 1000)}s`;
+            if(diff <= 0) el.classList.add('text-danger', 'fw-black');
+        });
+    }
+
+    function showLoginError() { document.getElementById('loginError').style.display = 'block'; setTimeout(() => { document.getElementById('loginError').style.display = 'none'; }, 3000); }
+
+    function mountAdminDropdown() {
+        const globalDropdownContainer = document.getElementById('global-dropdown-container');
+        const adminFloatCard = document.getElementById('adminFloatCard');
+        if (globalDropdownContainer && adminFloatCard && adminFloatCard.parentElement !== globalDropdownContainer) {
+            globalDropdownContainer.appendChild(adminFloatCard);
+        }
+
+        document.addEventListener('click', (event) => {
+            const card = document.getElementById('adminFloatCard');
+            const trigger = document.getElementById('adminProfileTrigger');
+            if (!card || !trigger || !card.classList.contains('active')) return;
+            if (!card.contains(event.target) && !trigger.contains(event.target)) {
+                card.classList.remove('active');
+            }
+        });
+
+        window.addEventListener('resize', updateAdminDropdownPosition);
+        window.addEventListener('scroll', updateAdminDropdownPosition, true);
+    }
+
+    function updateAdminDropdownPosition() {
+        const trigger = document.getElementById('adminProfileTrigger');
+        const card = document.getElementById('adminFloatCard');
+        if (!trigger || !card) return;
+
+        const triggerRect = trigger.getBoundingClientRect();
+        const dropdownWidth = card.offsetWidth || 380;
+        const spacing = 12;
+        const maxLeft = window.innerWidth - dropdownWidth - 12;
+        const left = Math.min(Math.max(12, triggerRect.right - dropdownWidth), maxLeft);
+
+        card.style.top = `${triggerRect.bottom + spacing}px`;
+        card.style.left = `${left}px`;
+    }
+
+    function toggleAdminCard(event) {
+        if (event) event.stopPropagation();
+        const card = document.getElementById('adminFloatCard');
+        if (!card) return;
+        card.classList.toggle('active');
+        if (card.classList.contains('active')) updateAdminDropdownPosition();
+    }
+
+    function setRole(role) { currentRole = role; document.getElementById('btnStudent').classList.toggle('active', role === 'student'); document.getElementById('btnAdmin').classList.toggle('active', role === 'admin'); }
+    function logout() { localStorage.clear(); location.reload(); }
+    function addHistory(msg) { adminHistory.unshift({ msg, time: new Date().toLocaleTimeString() }); localStorage.setItem('adminHistory', JSON.stringify(adminHistory.slice(0, 20))); renderAdminHistory(); }
+    function renderAdminHistory() { const log = document.getElementById('adminActionLog'); if(log) log.innerHTML = adminHistory.map(h => `<div class="history-item"><div class="fw-bold">${h.msg}</div><div class="text-muted smaller">${h.time}</div></div>`).join(''); }
+    function clearHistory() { adminHistory = []; localStorage.removeItem('adminHistory'); renderAdminHistory(); }
+    function setCategoryFilter(cat, el) {
+        activeFilterCat = cat;
+        document.querySelectorAll('.cat-pill')
+            .forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        filterInventory();
+    }
+    function filterInventory() {
+        const q = document.getElementById('inventorySearch').value.toLowerCase();
+        const filtered = masterBooks.filter(b =>
+            (b.title.toLowerCase().includes(q) ||
+             b.book_no.toLowerCase().includes(q)) &&
+            (activeFilterCat === 'All' || b.category === activeFilterCat)
+        );
+        renderInventory(filtered);
+    }
+</script>
+
+    <!-- ===== FOOTER SECTION ===== -->
+    <footer class="main-footer">
+      <div class="footer-content">
+        <p>© 2026 Library Borrowing and Assistance System</p>
+        <p>The Makers of the System</p>
+        <p>
+          Purpose:
+          <a class="footer-purpose-link" href="/creators">Creators Page</a>
+        </p>
+      </div>
+    </footer>
+</body>
+</html>
