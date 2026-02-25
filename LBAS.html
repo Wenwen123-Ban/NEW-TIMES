@@ -135,6 +135,8 @@
         justify-content: center;
         padding: 20px;
         flex-direction: column;
+        margin: 0 0 24px;
+        border-radius: 0 0 24px 24px;
       }
 
       #portalSection,
@@ -187,6 +189,31 @@
       }
       .welcome-flow-card.hidden-step {
         display: none;
+      }
+
+      .welcome-slider-wrap {
+        width: 100%;
+        max-width: 520px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+      }
+
+      .slide-nav-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        font-size: 1.25rem;
+        font-weight: 800;
+      }
+
+      .slide-nav-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
       }
       .welcome-icon-badge {
         width: 64px;
@@ -883,24 +910,22 @@
     </div>
 
     <div id="loginSection" class="content">
-      <div id="studentWelcomeStep" class="welcome-flow-card">
-        <div class="welcome-icon-badge mb-3"><i class="fas fa-graduation-cap"></i></div>
-        <h3 class="fw-bold text-dark mb-1">WELCOME STUDENTS!</h3>
-        <p class="text-muted small mb-4">Welcome to the Library Borrowing and Assistance System.</p>
-        <button class="btn btn-dark btn-lg w-100 rounded-pill fw-bold shadow-sm" onclick="setStudentLoginStep('manual')">NEXT</button>
-      </div>
+      <div class="welcome-slider-wrap">
+        <button id="studentPrevBtn" class="slide-nav-btn" onclick="shiftStudentLoginStep(-1)">&lt;</button>
 
-      <div id="studentManualStep" class="welcome-flow-card hidden-step">
-        <div class="welcome-icon-badge mb-3"><i class="fas fa-circle-info"></i></div>
-        <h4 class="fw-bold text-dark mb-2">Quick Manual</h4>
-        <p class="text-muted small mb-4">Here you could manage your Books borrowed and reserved.</p>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-secondary w-50 rounded-pill fw-bold" onclick="setStudentLoginStep('welcome')">BACK</button>
-          <button class="btn btn-dark w-50 rounded-pill fw-bold" onclick="setStudentLoginStep('login')">NEXT</button>
+        <div id="studentWelcomeStep" class="welcome-flow-card">
+          <div class="welcome-icon-badge mb-3"><i class="fas fa-graduation-cap"></i></div>
+          <h3 class="fw-bold text-dark mb-1">Welcome Students!</h3>
+          <p class="text-muted small mb-0">Welcome to the Library Borrowing and Assistance System.</p>
         </div>
-      </div>
 
-      <div id="studentLoginCard" class="login-card hidden-step">
+        <div id="studentManualStep" class="welcome-flow-card hidden-step">
+          <div class="welcome-icon-badge mb-3"><i class="fas fa-circle-info"></i></div>
+          <h4 class="fw-bold text-dark mb-2">Quick Manual</h4>
+          <p class="text-muted small mb-0">Hi students Be Responsible Borrower and making a responsible Reservations of the books and good luck studying!</p>
+        </div>
+
+        <div id="studentLoginCard" class="login-card hidden-step">
         <div class="mb-4">
           <div
             class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center shadow-lg"
@@ -937,11 +962,6 @@
           SECURE LOGIN
         </button>
 
-        <div class="d-flex gap-2 mb-3">
-          <button class="btn btn-outline-secondary w-50 rounded-pill fw-bold" onclick="setStudentLoginStep('manual')">BACK</button>
-          <button class="btn btn-outline-primary w-50 rounded-pill fw-bold" onclick="setStudentLoginStep('welcome')">MAIN GREETING</button>
-        </div>
-
         <div class="d-flex align-items-center my-3">
           <hr class="flex-grow-1" />
           <span class="px-2 text-muted small">New Student?</span>
@@ -963,6 +983,9 @@
           <i class="fas fa-exclamation-triangle me-1"></i>
           <span id="errorText">CREDENTIALS INVALID</span>
         </div>
+      </div>
+
+        <button id="studentNextBtn" class="slide-nav-btn" onclick="shiftStudentLoginStep(1)">&gt;</button>
       </div>
       <div class="mt-4 text-muted small opacity-50">
         Authorized Access Only | V7.2-BETA
@@ -1348,6 +1371,8 @@
         const welcome = document.getElementById("studentWelcomeStep");
         const manual = document.getElementById("studentManualStep");
         const login = document.getElementById("studentLoginCard");
+        const prev = document.getElementById("studentPrevBtn");
+        const next = document.getElementById("studentNextBtn");
         if (!welcome || !manual || !login) return;
 
         welcome.classList.add("hidden-step");
@@ -1356,13 +1381,39 @@
 
         if (step === "manual") {
           manual.classList.remove("hidden-step");
+          if (prev) prev.disabled = false;
+          if (next) next.disabled = false;
           return;
         }
         if (step === "login") {
           login.classList.remove("hidden-step");
+          if (prev) prev.disabled = false;
+          if (next) next.disabled = true;
           return;
         }
         welcome.classList.remove("hidden-step");
+        if (prev) prev.disabled = true;
+        if (next) next.disabled = false;
+      }
+
+      const studentLoginSteps = ["welcome", "manual", "login"];
+
+      function shiftStudentLoginStep(direction) {
+        const activeStep = studentLoginSteps.find((stepName) => {
+          const map = {
+            welcome: "studentWelcomeStep",
+            manual: "studentManualStep",
+            login: "studentLoginCard",
+          };
+          const el = document.getElementById(map[stepName]);
+          return el && !el.classList.contains("hidden-step");
+        }) || "welcome";
+
+        const nextIndex = Math.min(
+          Math.max(studentLoginSteps.indexOf(activeStep) + direction, 0),
+          studentLoginSteps.length - 1,
+        );
+        setStudentLoginStep(studentLoginSteps[nextIndex]);
       }
 
       async function handleLogin() {
