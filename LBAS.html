@@ -172,6 +172,34 @@
         background: linear-gradient(90deg, var(--primary), var(--accent));
       }
 
+      .welcome-flow-card {
+        background: var(--glass-strong);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        padding: 30px;
+        border-radius: 24px;
+        border: 1px solid var(--glass-border);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
+        width: 100%;
+        max-width: 380px;
+        text-align: center;
+      }
+      .welcome-flow-card.hidden-step {
+        display: none;
+      }
+      .welcome-icon-badge {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 213, 79, 0.18);
+        border: 1px solid rgba(255, 213, 79, 0.45);
+        color: #ffd54f;
+        font-size: 1.6rem;
+      }
+
       .upload-circle {
         width: 90px;
         height: 90px;
@@ -844,7 +872,24 @@
     </div>
 
     <div id="loginSection" class="content">
-      <div class="login-card">
+      <div id="studentWelcomeStep" class="welcome-flow-card">
+        <div class="welcome-icon-badge mb-3"><i class="fas fa-graduation-cap"></i></div>
+        <h3 class="fw-bold text-dark mb-1">WELCOME STUDENTS!</h3>
+        <p class="text-muted small mb-4">Welcome to the Library Borrowing and Assistance System.</p>
+        <button class="btn btn-dark btn-lg w-100 rounded-pill fw-bold shadow-sm" onclick="setStudentLoginStep('manual')">NEXT</button>
+      </div>
+
+      <div id="studentManualStep" class="welcome-flow-card hidden-step">
+        <div class="welcome-icon-badge mb-3"><i class="fas fa-circle-info"></i></div>
+        <h4 class="fw-bold text-dark mb-2">Quick Manual</h4>
+        <p class="text-muted small mb-4">Here you could manage your Books borrowed and reserved.</p>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary w-50 rounded-pill fw-bold" onclick="setStudentLoginStep('welcome')">BACK</button>
+          <button class="btn btn-dark w-50 rounded-pill fw-bold" onclick="setStudentLoginStep('login')">NEXT</button>
+        </div>
+      </div>
+
+      <div id="studentLoginCard" class="login-card hidden-step">
         <div class="mb-4">
           <div
             class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center shadow-lg"
@@ -880,6 +925,11 @@
         >
           SECURE LOGIN
         </button>
+
+        <div class="d-flex gap-2 mb-3">
+          <button class="btn btn-outline-secondary w-50 rounded-pill fw-bold" onclick="setStudentLoginStep('manual')">BACK</button>
+          <button class="btn btn-outline-primary w-50 rounded-pill fw-bold" onclick="setStudentLoginStep('welcome')">MAIN GREETING</button>
+        </div>
 
         <div class="d-flex align-items-center my-3">
           <hr class="flex-grow-1" />
@@ -1281,6 +1331,27 @@
 
       async function fetchUserActiveReservations() {
         await loadReservations();
+      }
+
+      function setStudentLoginStep(step) {
+        const welcome = document.getElementById("studentWelcomeStep");
+        const manual = document.getElementById("studentManualStep");
+        const login = document.getElementById("studentLoginCard");
+        if (!welcome || !manual || !login) return;
+
+        welcome.classList.add("hidden-step");
+        manual.classList.add("hidden-step");
+        login.classList.add("hidden-step");
+
+        if (step === "manual") {
+          manual.classList.remove("hidden-step");
+          return;
+        }
+        if (step === "login") {
+          login.classList.remove("hidden-step");
+          return;
+        }
+        welcome.classList.remove("hidden-step");
       }
 
       async function handleLogin() {
@@ -1908,12 +1979,14 @@
 
         document.getElementById("portalSection").style.display = "none";
         document.getElementById("loginSection").style.display = "flex";
+        setStudentLoginStep("welcome");
         document.getElementById("accountPanel").style.display = "none";
         toggleModal("reserveModal", false);
         document.getElementById("bookContainer").innerHTML = "";
       }
 
       window.onload = () => {
+        setStudentLoginStep("welcome");
         leaderboardProfileModal = new bootstrap.Modal(
           document.getElementById("leaderboardProfileModal"),
         );

@@ -107,6 +107,21 @@
             pointer-events: auto;
         }
         .side-down-card.active { display: block; }
+
+        .welcome-step { display: none; }
+        .welcome-step.active { display: block; }
+        .welcome-title { font-weight: 800; letter-spacing: 0.5px; }
+        .welcome-icon-wrap {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(56, 189, 248, 0.12);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            font-size: 1.5rem;
+        }
         
         /* Security Overlays */
         .control-lock-overlay {
@@ -582,7 +597,28 @@
         </div>
     </header>
     <div class="side-down-card account-dropdown shadow-lg" id="adminFloatCard" onclick="event.stopPropagation()">
-        <div id="loginForm">
+        <div id="adminWelcomeStep" class="welcome-step active">
+            <div class="text-center mb-4">
+                <div class="welcome-icon-wrap mb-3"><i class="fas fa-book-open-reader"></i></div>
+                <h5 class="welcome-title text-dark mb-1">WELCOME LIBRARIAN!</h5>
+                <p class="small text-muted mb-0">Let&apos;s get you started with LBAS.</p>
+            </div>
+            <button class="btn btn-primary w-100 fw-bold py-3 rounded-3 shadow-sm" onclick="showAdminIntroStep('manual')">NEXT</button>
+        </div>
+
+        <div id="adminManualStep" class="welcome-step">
+            <div class="text-center mb-4">
+                <div class="welcome-icon-wrap mb-3"><i class="fas fa-circle-info"></i></div>
+                <h5 class="welcome-title text-dark mb-2">Quick Manual</h5>
+                <p class="small text-muted mb-0">Here you manage Library stuff using this system as research project of the BSIT 1st year.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary w-50 fw-bold py-2 rounded-3" onclick="showAdminIntroStep('welcome')">BACK</button>
+                <button class="btn btn-primary w-50 fw-bold py-2 rounded-3 shadow-sm" onclick="showAdminIntroStep('login')">NEXT</button>
+            </div>
+        </div>
+
+        <div id="loginForm" class="welcome-step">
             <div class="text-center mb-4">
                 <h5 class="fw-bold text-dark"><i class="fas fa-fingerprint text-primary me-2"></i>Staff Authorization</h5>
                 <p class="small text-muted">Identify yourself to unlock controls</p>
@@ -600,6 +636,10 @@
                 </div>
             </div>
             <button class="btn btn-primary w-100 fw-bold py-3 rounded-3 shadow-sm transition-all" onclick="attemptLogin()">AUTHENTICATE SESSION</button>
+            <div class="d-flex gap-2 mt-2">
+                <button class="btn btn-outline-secondary w-50 fw-bold py-2 rounded-3" onclick="showAdminIntroStep('manual')">BACK</button>
+                <button class="btn btn-outline-primary w-50 fw-bold py-2 rounded-3" onclick="showAdminIntroStep('welcome')">MAIN GREETING</button>
+            </div>
             <div id="loginError" class="alert alert-danger mt-3 small py-2 fw-bold text-center" style="display:none;">
                 <i class="fas fa-exclamation-triangle me-2"></i>Access Denied
             </div>
@@ -929,6 +969,7 @@
 
     window.onload = () => {
         mountAdminDropdown();
+        showAdminIntroStep('welcome');
         if(localStorage.getItem('isStaffAuth') === 'true') {
             executeUnlock(localStorage.getItem('adminName'), localStorage.getItem('adminPhoto'), localStorage.getItem('adminSchoolId'), localStorage.getItem('adminToken'));
         }
@@ -1248,11 +1289,34 @@
         } catch (e) { showLoginError(); }
     }
 
+    function showAdminIntroStep(step) {
+        const welcome = document.getElementById('adminWelcomeStep');
+        const manual = document.getElementById('adminManualStep');
+        const login = document.getElementById('loginForm');
+        if (!welcome || !manual || !login) return;
+
+        welcome.classList.remove('active');
+        manual.classList.remove('active');
+        login.classList.remove('active');
+
+        if (step === 'manual') {
+            manual.classList.add('active');
+            return;
+        }
+        if (step === 'login') {
+            login.classList.add('active');
+            return;
+        }
+        welcome.classList.add('active');
+    }
+
     function executeUnlock(name, photo, schoolId = '', token = '') {
         isStaff = true;
         staffSessionID = (schoolId || localStorage.getItem('adminSchoolId') || '').toLowerCase();
         staffSessionToken = token || localStorage.getItem('adminToken') || '';
         document.getElementById('mainBody').classList.add('is-unlocked');
+        document.getElementById('adminWelcomeStep')?.classList.remove('active');
+        document.getElementById('adminManualStep')?.classList.remove('active');
         document.getElementById('loginForm').style.display = 'none';
         document.getElementById('adminProfile').style.display = 'block';
         document.getElementById('activeAdminName').innerText = name;
