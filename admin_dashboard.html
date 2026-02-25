@@ -39,6 +39,7 @@
             display: flex;
             flex: 1;
             align-items: stretch;
+            position: relative;
         }
         /* Navigation & Sidebar */
         .sidebar { background: var(--admin-dark); color: white; position: relative; z-index: 100; width: var(--sidebar-w); padding: 25px; transition: 0.3s; display: flex; flex-direction: column; border-right: 1px solid #1e293b; }
@@ -122,6 +123,58 @@
             justify-content: center;
             color: var(--accent);
             font-size: 1.5rem;
+        }
+
+        .admin-gate-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 4200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.42);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 24px;
+        }
+
+        .admin-gate-slider {
+            width: min(680px, 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .admin-gate-panel {
+            width: min(460px, 100%);
+            background: rgba(12, 17, 33, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            border-radius: 24px;
+            padding: 28px;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+            text-align: center;
+            color: #fff;
+        }
+
+        .admin-gate-nav {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.45);
+            background: rgba(0, 0, 0, 0.4);
+            color: #fff;
+            font-size: 1.3rem;
+            font-weight: 800;
+        }
+
+        .admin-gate-nav:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        body.is-unlocked .admin-gate-overlay {
+            display: none;
         }
         
         /* Security Overlays */
@@ -558,6 +611,44 @@
     </header>
 
 <div class="main-wrapper dashboard-layout">
+<div id="adminGateOverlay" class="admin-gate-overlay">
+    <div class="admin-gate-slider">
+        <button id="adminPrevBtn" class="admin-gate-nav" onclick="shiftAdminIntroStep(-1)">&lt;</button>
+
+        <div id="adminWelcomeStep" class="admin-gate-panel welcome-step active">
+            <div class="welcome-icon-wrap mb-3"><i class="fas fa-book-open-reader"></i></div>
+            <h4 class="welcome-title mb-2">Welcome Librarians!</h4>
+            <p class="small mb-0">Start here before entering LBAS command center tools.</p>
+        </div>
+
+        <div id="adminManualStep" class="admin-gate-panel welcome-step">
+            <div class="welcome-icon-wrap mb-3"><i class="fas fa-circle-info"></i></div>
+            <h5 class="welcome-title mb-2">Quick Manual</h5>
+            <p class="small mb-0">Hi there Librarians here you can manage Library reservation and students borrowing good luck!</p>
+        </div>
+
+        <div id="loginForm" class="admin-gate-panel welcome-step">
+            <div class="mb-3">
+                <h5 class="fw-bold"><i class="fas fa-fingerprint text-warning me-2"></i>Staff Authorization</h5>
+                <p class="small text-white-50 mb-0">Identify yourself to unlock controls</p>
+            </div>
+            <div class="mb-3 text-start">
+                <label class="small fw-bold mb-1">Admin ID</label>
+                <input type="text" id="loginUser" class="form-control bg-light border-0 py-2" placeholder="Admin ID">
+            </div>
+            <div class="mb-3 text-start">
+                <label class="small fw-bold mb-1">Secure Phrase</label>
+                <input type="password" id="loginPass" class="form-control bg-light border-0 py-2" placeholder="Secure Phrase">
+            </div>
+            <button class="btn btn-warning w-100 fw-bold py-2 rounded-3 shadow-sm" onclick="attemptLogin()">AUTHENTICATE SESSION</button>
+            <div id="loginError" class="alert alert-danger mt-3 small py-2 fw-bold text-center" style="display:none;">
+                <i class="fas fa-exclamation-triangle me-2"></i>Access Denied
+            </div>
+        </div>
+
+        <button id="adminNextBtn" class="admin-gate-nav" onclick="shiftAdminIntroStep(1)">&gt;</button>
+    </div>
+</div>
 <div class="sidebar">
     <div class="text-center mb-5 mt-3">
         <div class="bg-white rounded-4 d-inline-block p-3 mb-3 shadow-lg" style="opacity: 0.9;">
@@ -608,54 +699,6 @@
         </div>
     </header>
     <div class="side-down-card account-dropdown shadow-lg" id="adminFloatCard" onclick="event.stopPropagation()">
-        <div id="adminWelcomeStep" class="welcome-step active">
-            <div class="text-center mb-4">
-                <div class="welcome-icon-wrap mb-3"><i class="fas fa-book-open-reader"></i></div>
-                <h5 class="welcome-title text-dark mb-1">WELCOME LIBRARIAN!</h5>
-                <p class="small text-muted mb-0">Let&apos;s get you started with LBAS.</p>
-            </div>
-            <button class="btn btn-primary w-100 fw-bold py-3 rounded-3 shadow-sm" onclick="showAdminIntroStep('manual')">NEXT</button>
-        </div>
-
-        <div id="adminManualStep" class="welcome-step">
-            <div class="text-center mb-4">
-                <div class="welcome-icon-wrap mb-3"><i class="fas fa-circle-info"></i></div>
-                <h5 class="welcome-title text-dark mb-2">Quick Manual</h5>
-                <p class="small text-muted mb-0">Here you manage Library stuff using this system as research project of the BSIT 1st year.</p>
-            </div>
-            <div class="d-flex gap-2">
-                <button class="btn btn-outline-secondary w-50 fw-bold py-2 rounded-3" onclick="showAdminIntroStep('welcome')">BACK</button>
-                <button class="btn btn-primary w-50 fw-bold py-2 rounded-3 shadow-sm" onclick="showAdminIntroStep('login')">NEXT</button>
-            </div>
-        </div>
-
-        <div id="loginForm" class="welcome-step">
-            <div class="text-center mb-4">
-                <h5 class="fw-bold text-dark"><i class="fas fa-fingerprint text-primary me-2"></i>Staff Authorization</h5>
-                <p class="small text-muted">Identify yourself to unlock controls</p>
-            </div>
-            <div class="mb-3">
-                <div class="input-group">
-                    <span class="input-group-text bg-light border-0"><i class="fas fa-id-card text-muted"></i></span>
-                    <input type="text" id="loginUser" class="form-control bg-light border-0 py-2" placeholder="Admin ID">
-                </div>
-            </div>
-            <div class="mb-4">
-                <div class="input-group">
-                    <span class="input-group-text bg-light border-0"><i class="fas fa-key text-muted"></i></span>
-                    <input type="password" id="loginPass" class="form-control bg-light border-0 py-2" placeholder="Secure Phrase">
-                </div>
-            </div>
-            <button class="btn btn-primary w-100 fw-bold py-3 rounded-3 shadow-sm transition-all" onclick="attemptLogin()">AUTHENTICATE SESSION</button>
-            <div class="d-flex gap-2 mt-2">
-                <button class="btn btn-outline-secondary w-50 fw-bold py-2 rounded-3" onclick="showAdminIntroStep('manual')">BACK</button>
-                <button class="btn btn-outline-primary w-50 fw-bold py-2 rounded-3" onclick="showAdminIntroStep('welcome')">MAIN GREETING</button>
-            </div>
-            <div id="loginError" class="alert alert-danger mt-3 small py-2 fw-bold text-center" style="display:none;">
-                <i class="fas fa-exclamation-triangle me-2"></i>Access Denied
-            </div>
-        </div>
-
         <div id="adminProfile" style="display: none;">
             <div class="text-center mb-4">
                 <img id="activeAdminPhoto" src="/Profile/default.png" class="rounded-circle border border-4 border-primary mb-3 shadow-sm" style="width: 90px; height: 90px; object-fit: cover;">
@@ -1320,10 +1363,14 @@
         } catch (e) { showLoginError(); }
     }
 
+    const adminIntroSteps = ['welcome', 'manual', 'login'];
+
     function showAdminIntroStep(step) {
         const welcome = document.getElementById('adminWelcomeStep');
         const manual = document.getElementById('adminManualStep');
         const login = document.getElementById('loginForm');
+        const prev = document.getElementById('adminPrevBtn');
+        const next = document.getElementById('adminNextBtn');
         if (!welcome || !manual || !login) return;
 
         welcome.classList.remove('active');
@@ -1332,13 +1379,35 @@
 
         if (step === 'manual') {
             manual.classList.add('active');
+            if (prev) prev.disabled = false;
+            if (next) next.disabled = false;
             return;
         }
         if (step === 'login') {
             login.classList.add('active');
+            if (prev) prev.disabled = false;
+            if (next) next.disabled = true;
             return;
         }
+
         welcome.classList.add('active');
+        if (prev) prev.disabled = true;
+        if (next) next.disabled = false;
+    }
+
+    function shiftAdminIntroStep(direction) {
+        const activeStep = adminIntroSteps.find((stepName) => {
+            const map = {
+                welcome: 'adminWelcomeStep',
+                manual: 'adminManualStep',
+                login: 'loginForm'
+            };
+            const el = document.getElementById(map[stepName]);
+            return el && el.classList.contains('active');
+        }) || 'welcome';
+
+        const nextIndex = Math.min(Math.max(adminIntroSteps.indexOf(activeStep) + direction, 0), adminIntroSteps.length - 1);
+        showAdminIntroStep(adminIntroSteps[nextIndex]);
     }
 
     function executeUnlock(name, photo, schoolId = '', token = '') {
@@ -1348,7 +1417,7 @@
         document.getElementById('mainBody').classList.add('is-unlocked');
         document.getElementById('adminWelcomeStep')?.classList.remove('active');
         document.getElementById('adminManualStep')?.classList.remove('active');
-        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('loginForm')?.classList.remove('active');
         document.getElementById('adminProfile').style.display = 'block';
         document.getElementById('activeAdminName').innerText = name;
         document.getElementById('headerAvatar').src = `/Profile/${photo}`;
