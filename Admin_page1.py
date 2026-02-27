@@ -264,9 +264,9 @@ def run_auto_sync_engine():
     now = datetime.now()
     changes_made = False
 
-    # 1. Sync Reservations (Expire if not claimed)
+    # 1. Sync Reservations (legacy expiry support only)
     for t in transactions:
-        if t["status"] == "Reserved" and "expiry" in t:
+        if t["status"] == "Reserved" and "expiry" in t and t.get("expiry"):
             try:
                 if now > datetime.strptime(t["expiry"], "%Y-%m-%d %H:%M"):
                     t["status"] = "Expired"
@@ -719,7 +719,7 @@ def api_cancel_reservation():
         if (
             t.get("book_no") == b_no
             and str(t.get("school_id", "")).strip().lower() == s_id
-            and t.get("status") == "Reserved"
+            and t.get("status") in ["Reserved", "Unavailable"]
         ):
             t["status"] = "Cancelled"
             t["cancelled_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -767,68 +767,82 @@ def api_process_trans():
     # LOGIC 2: BORROW (Restored for Tablet)
     elif action == "borrow":
         target_book = next((b for b in books if b["book_no"] == b_no), None)
+        return_due_date = str(data.get("return_due_date", "")).strip()
 
         # Resolve active reservation first so librarian approvals can convert reservations
         # even if the request does not include school_id.
-        reserved_transaction = next(
-            (
-                t
-                for t in reversed(transactions)
-                if t.get("book_no") == b_no and t.get("status") == "Reserved"
-            ),
-            None,
-        )
+        reserved_candidates = [
+            t for t in transactions if t.get("book_no") == b_no and t.get("status") == "Reserved"
+        ]
+
+        def _reservation_sort_key(tx):
+            pickup = str(tx.get("pickup_schedule") or "").strip()
+            try:
+                pickup_dt = datetime.strptime(pickup, "%Y-%m-%d")
+            except ValueError:
+                pickup_dt = datetime.max
+            created_raw = str(tx.get("date") or "").strip()
+            try:
+                created_dt = datetime.strptime(created_raw, "%Y-%m-%d %H:%M")
+            except ValueError:
+                created_dt = datetime.max
+            return pickup_dt, created_dt
+
+        reserved_candidates.sort(key=_reservation_sort_key)
+        reserved_transaction = reserved_candidates[0] if reserved_candidates else None
 
         if not s_id and reserved_transaction:
             s_id = str(reserved_transaction.get("school_id", "")).strip().lower()
 
-        # Validation: Is it available or reserved by THIS user?
-        user_reserved = any(
-            t["book_no"] == b_no
-            and str(t.get("school_id", "")).strip().lower() == s_id
-            and t["status"] == "Reserved"
-            for t in transactions
-        )
-
-        can_borrow = target_book and (
-            target_book.get("status") == "Available"
-            or target_book.get("status") == "Reserved"
-            or user_reserved
-        )
-
-        if can_borrow:
-            target_book["status"] = "Borrowed"
-
-            # Close reservation if exists
-            for t in transactions:
-                if t["book_no"] == b_no and t["status"] == "Reserved":
-                    t["status"] = "Converted"  # Mark old reservation as done
-
-            # Create Borrow Record
-            previous_reservation = next(
+        if s_id:
+            selected = next(
                 (
-                    t
-                    for t in transactions
-                    if t.get("book_no") == b_no
-                    and t.get("school_id") == s_id
-                    and t.get("status") in ["Reserved", "Converted"]
+                    tx
+                    for tx in reserved_candidates
+                    if str(tx.get("school_id", "")).strip().lower() == s_id
                 ),
                 None,
             )
+            if selected:
+                reserved_transaction = selected
+
+        can_borrow = target_book and target_book.get("status") != "Borrowed"
+
+        if can_borrow and reserved_transaction:
+            target_book["status"] = "Borrowed"
+
+            chosen_school_id = str(reserved_transaction.get("school_id", "")).strip().lower()
+
+            # Close queue: chosen reservation is converted, all other queued reservations are marked unavailable.
+            for t in transactions:
+                if t["book_no"] == b_no and t["status"] == "Reserved":
+                    t_school_id = str(t.get("school_id", "")).strip().lower()
+                    if t_school_id == chosen_school_id:
+                        t["status"] = "Converted"
+                    else:
+                        t["status"] = "Unavailable"
+                        t["unavailable_reason"] = "This book was borrowed by another user before your reserved pickup date."
+                        t["unavailable_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+
             now = datetime.now()
+            try:
+                parsed_due_date = datetime.strptime(return_due_date, "%Y-%m-%d") if return_due_date else (now + timedelta(days=2))
+            except ValueError:
+                parsed_due_date = now + timedelta(days=2)
+
             transactions.append(
                 {
                     "book_no": b_no,
                     "title": (target_book or {}).get("title", ""),
-                    "school_id": s_id,
+                    "school_id": chosen_school_id,
                     "status": "Borrowed",
                     "date": now.strftime("%Y-%m-%d %H:%M"),
-                    "expiry": (now + timedelta(days=2)).strftime("%Y-%m-%d %H:%M"),
-                    "pickup_location": (previous_reservation or {}).get("pickup_location", ""),
-                    "pickup_schedule": (previous_reservation or {}).get("pickup_schedule", ""),
-                    "reservation_note": (previous_reservation or {}).get("reservation_note", ""),
-                    "borrower_name": (previous_reservation or {}).get("borrower_name", ""),
-                    "reserved_at": (previous_reservation or {}).get("date", ""),
+                    "expiry": parsed_due_date.strftime("%Y-%m-%d"),
+                    "pickup_location": (reserved_transaction or {}).get("pickup_location", ""),
+                    "pickup_schedule": (reserved_transaction or {}).get("pickup_schedule", ""),
+                    "reservation_note": (reserved_transaction or {}).get("reservation_note", ""),
+                    "borrower_name": (reserved_transaction or {}).get("borrower_name", ""),
+                    "reserved_at": (reserved_transaction or {}).get("date", ""),
                 }
             )
         else:
@@ -910,8 +924,7 @@ def api_reserve():
         )
 
     for b in books:
-        if b["book_no"] == b_no and b["status"] == "Available":
-            b["status"] = "Reserved"
+        if b["book_no"] == b_no and b["status"] != "Borrowed":
             transactions.append(
                 {
                     "book_no": b_no,
@@ -926,7 +939,6 @@ def api_reserve():
                     "reservation_note": str(data.get("reservation_note", "")).strip(),
                 }
             )
-            save_db("books", books)
             save_db("transactions", transactions)
             return jsonify({"success": True})
 
