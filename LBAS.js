@@ -286,50 +286,7 @@
       }
 
       async function submitRegistration() {
-        const name = document.getElementById("regName").value;
-        const id = document.getElementById("regID").value;
-        const pwd = document.getElementById("regPass").value;
-        const file = document.getElementById("regPhoto").files[0];
-
-        if (!name || !id || !pwd) return alert("Please fill all fields.");
-
-        const fd = new FormData();
-        fd.append("name", name);
-        fd.append("school_id", id);
-        fd.append("password", pwd);
-        if (file) fd.append("photo", file);
-
-        try {
-          const res = await fetch("/api/register_student", {
-            method: "POST",
-            body: fd,
-          });
-          const data = await res.json();
-
-          toggleModal("registerModal", false); // Close form
-
-          if (data.success) {
-            showStatusPopup(
-              "success",
-              "Application Sent!",
-              "Your request has been forwarded to the Librarian. You cannot log in until approved.",
-            );
-            document.getElementById("regName").value = "";
-            document.getElementById("regID").value = "";
-            document.getElementById("regPass").value = "";
-            document.getElementById("previewImg").src = "";
-            document.getElementById("previewImg").style.display = "none";
-            document.getElementById("uploadIcon").style.display = "block";
-          } else {
-            showStatusPopup(
-              "error",
-              "Registration Failed",
-              data.message || "ID already exists or invalid data.",
-            );
-          }
-        } catch (e) {
-          alert("Network Error during registration.");
-        }
+        showStatusPopup("warning", "Registration Disabled", "Account registration is managed by the official school database.");
       }
 
       function showStatusPopup(type, title, msg) {

@@ -321,57 +321,6 @@ def audit_view():
     return render_template("Admin_users_list.html")
 
 
-@app.route("/dev/analysis")
-def dev_analysis():
-    return render_template("Developers_rate_analysis.html")
-
-
-@app.route("/creators")
-def creators_page():
-    return render_template("Creators.html")
-
-
-@app.route("/api/creators/upload", methods=["POST"])
-def api_creators_upload():
-    payload = request.get_json(silent=True) or {}
-    slot = str(request.form.get("slot") or payload.get("slot") or "").strip()
-    role = str(request.form.get("role") or payload.get("role") or "").strip()
-    name = str(request.form.get("name") or payload.get("name") or "").strip()
-    description = str(
-        request.form.get("description") or payload.get("description") or ""
-    ).strip()
-
-    if not slot or not role or not name:
-        return (
-            jsonify({"success": False, "message": "slot, role and name are required"}),
-            400,
-        )
-
-    photo_file = request.files.get("photo")
-    profiles = load_creators_profiles()
-    existing = profiles.get(slot, {})
-    photo_filename = existing.get("photo", "")
-
-    if photo_file and photo_file.filename:
-        ext = os.path.splitext(secure_filename(photo_file.filename))[1].lower() or ".png"
-        photo_filename = f"{sanitize_creator_name(name)}_{int(datetime.now().timestamp() * 1000)}{ext}"
-        photo_file.save(os.path.join(app.config["UPLOAD_FOLDER"], photo_filename))
-    profiles[slot] = {
-        "slot": slot,
-        "role": role,
-        "name": name,
-        "description": description,
-        "photo": photo_filename,
-        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    save_creators_profiles(profiles)
-
-    return jsonify({"success": True, "profile": profiles[slot], "total": len(profiles)})
-
-
-@app.route("/api/creators/profiles")
-def api_creators_profiles():
-    return jsonify({"success": True, "profiles": load_creators_profiles()})
 
 
 @app.route("/api/bulk_register", methods=["POST"])
@@ -525,92 +474,6 @@ def api_finalize_reset():
     return jsonify({"success": False}), 401
 
 
-@app.route("/api/register_student", methods=["POST"])
-def api_reg_student():
-    try:
-        name = request.form.get("name")
-        school_id = request.form.get("school_id")
-        password = request.form.get("password")
-        photo = request.files.get("photo")
-
-        s_id = str(school_id or "").strip().lower()
-        if not name or not s_id or not password:
-            return jsonify({"success": False, "message": "Missing required fields"}), 400
-
-        if find_any_user(s_id):
-            return jsonify({"success": False, "message": "ID Exists"}), 400
-
-        saved_photo = "default.png"
-        if photo and photo.filename:
-            _, ext = os.path.splitext(photo.filename)
-            ext = ext.lower()[:10] if ext else ".png"
-            filename = secure_filename(f"{s_id}_{int(datetime.now().timestamp())}{ext}")
-            if filename:
-                photo.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-                saved_photo = filename
-
-        users = get_db("users")
-        users.append(
-            {
-                "name": name,
-                "school_id": s_id,
-                "password": password,
-                "category": "Student",
-                "photo": saved_photo,
-                "status": "pending",
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            }
-        )
-        save_db("users", users)
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)})
-
-
-@app.route("/api/register_librarian", methods=["POST"])
-def api_reg_staff():
-    return perform_registration("admins", "Staff")
-
-
-def perform_registration(target_db_key, category_name):
-    if request.is_json:
-        data = request.json
-        name = data.get("name")
-        s_id = str(data.get("school_id")).strip().lower()
-        pwd = data.get("password")
-    else:
-        name = request.form.get("name")
-        s_id = str(request.form.get("school_id")).strip().lower()
-        pwd = request.form.get("password")
-
-    if find_any_user(s_id):
-        return jsonify({"success": False, "message": "ID Exists"}), 400
-
-    photo = "default.png"
-    if "photo" in request.files:
-        f = request.files["photo"]
-        if f.filename != "":
-            ext = f.filename.split(".")[-1]
-            photo = secure_filename(f"{s_id}_{int(datetime.now().timestamp())}.{ext}")
-            f.save(os.path.join(app.config["UPLOAD_FOLDER"], photo))
-
-    # Students = Pending, Staff = Approved
-    status = "approved" if category_name == "Staff" else "pending"
-
-    registry = get_db(target_db_key)
-    registry.append(
-        {
-            "name": name,
-            "school_id": s_id,
-            "password": pwd,
-            "category": category_name,
-            "photo": photo,
-            "status": status,
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        }
-    )
-    save_db(target_db_key, registry)
-    return jsonify({"success": True})
 
 
 @app.route("/api/login", methods=["POST"])
@@ -840,23 +703,37 @@ def api_delete_member():
     return jsonify({"success": True})
 
 
-@app.route("/api/approve_user", methods=["POST"])
-def api_approve_user():
-    data = request.json
-    users = get_db("users")
-    for u in users:
-        if u["school_id"] == data["school_id"]:
-            u["status"] = "approved"
-            save_db("users", users)
-            return jsonify({"success": True})
-    return jsonify({"success": False}), 404
+@app.route("/api/cancel_reservation", methods=["POST"])
+def api_cancel_reservation():
+    if not require_auth():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
 
+    data = request.json or {}
+    b_no = data.get("book_no")
+    s_id = str(data.get("school_id", "")).strip().lower()
+    books = get_db("books")
+    transactions = get_db("transactions")
 
-@app.route("/api/reject_user", methods=["POST"])
-def api_reject_user():
-    data = request.json
-    users = [u for u in get_db("users") if u["school_id"] != data["school_id"]]
-    save_db("users", users)
+    changed = False
+    for t in transactions:
+        if (
+            t.get("book_no") == b_no
+            and str(t.get("school_id", "")).strip().lower() == s_id
+            and t.get("status") == "Reserved"
+        ):
+            t["status"] = "Cancelled"
+            t["cancelled_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            changed = True
+
+    if not changed:
+        return jsonify({"success": False, "message": "Active reservation not found"}), 404
+
+    for b in books:
+        if b.get("book_no") == b_no and b.get("status") == "Reserved":
+            b["status"] = "Available"
+
+    save_db("transactions", transactions)
+    save_db("books", books)
     return jsonify({"success": True})
 
 
@@ -1038,12 +915,6 @@ def api_reserve():
     return jsonify({"success": False, "message": "Unavailable"})
 
 
-@app.route("/dev/analysis")
-def dev_analysis_portal():
-    """Admin-only portal for rating metrics and database health."""
-    if is_mobile_request():
-        return "Access Forbidden: Desktop Analysis only.", 403
-    return render_template("Developers_rate_analysis.html")
 
 
 @app.route("/api/toggle_rating", methods=["POST"])
