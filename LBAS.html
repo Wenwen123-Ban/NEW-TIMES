@@ -334,14 +334,63 @@
         top: 86px;
         right: 20px;
         width: min(420px, calc(100% - 40px));
-        background: var(--glass-strong);
-        backdrop-filter: blur(2px);
-        -webkit-backdrop-filter: blur(2px);
-        border: 1px solid var(--glass-border);
+        background: #111;
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.28);
         border-radius: 14px;
         padding: 25px;
         animation: slideDown 0.3s;
-        z-index: 5000;
+        z-index: 1000;
+      }
+
+      .account-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 999;
+        display: none;
+      }
+
+      .account-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+
+      #closeAccountBtn {
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        border-radius: 999px;
+        width: 34px;
+        height: 34px;
+        line-height: 1;
+        font-weight: 700;
+      }
+
+      .reservation-card {
+        background: #1f1f1f;
+        color: #ffffff;
+        border-radius: 16px;
+        padding: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+      }
+
+      .status-badge {
+        background: #f4c430;
+        color: #000;
+        font-weight: 700;
+      }
+
+      .account-dropdown h1,
+      .account-dropdown h2,
+      .account-dropdown p,
+      .account-dropdown span,
+      .account-dropdown label,
+      .account-dropdown strong,
+      .account-dropdown code {
+        color: #fff !important;
       }
 
       .rating-fab {
@@ -743,7 +792,7 @@
           width: 100%;
           max-height: 100vh;
           height: 100vh;
-          border-radius: 18px 18px 0 0;
+          border-radius: 0;
           border-bottom: 0;
           padding: 16px;
           overflow-y: auto;
@@ -1049,8 +1098,13 @@
         </button>
       </nav>
 
-      <div id="accountPanel" class="account-dropdown">
-        <p class="fw-bold small text-uppercase text-muted mb-2">My Account</p>
+      <div id="accountOverlay" class="account-overlay"></div>
+
+      <div id="accountPanel" class="account-dropdown" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+        <div class="account-modal-header mb-2">
+          <p id="accountTitle" class="fw-bold small text-uppercase mb-0">My Account</p>
+          <button id="closeAccountBtn" type="button" aria-label="Close account panel">✕</button>
+        </div>
         <div class="d-flex align-items-center mb-3">
           <img
             id="user_pic"
@@ -1069,7 +1123,7 @@
             >
             <code class="text-muted small fw-bold" id="id_val"></code><br />
             <span
-              class="badge bg-light text-dark border mt-1"
+              class="badge border mt-1"
               id="database_source"
               style="font-size: 9px"
             ></span>
@@ -1405,14 +1459,14 @@
           active
             .map(
               (lease) => `
-                <div class="p-3 border rounded-3 mb-2 bg-light d-flex justify-content-between align-items-center gap-2">
+                <div class="reservation-card mb-2 d-flex justify-content-between align-items-center gap-2">
                   <div>
-                    <div class="fw-bold text-dark">${lease.title}</div>
-                    <code class="small text-primary fw-bold">${lease.book_no}</code><br>
-                    <span class="badge ${getNormalizedStatus(lease) === "reserved" ? "bg-warning text-dark" : "bg-success"}">${lease.status}</span>
+                    <div class="fw-bold">${lease.title}</div>
+                    <code class="small fw-bold">${lease.book_no}</code><br>
+                    <span class="badge ${getNormalizedStatus(lease) === "reserved" ? "status-badge" : "bg-success"}">${lease.status}</span>
                   </div>
                   <div class="text-end">
-                    ${getNormalizedStatus(lease) === "reserved" ? `<span class="small fw-bold text-warning d-block">Awaiting pickup</span>` : `<span class="timer small fw-bold text-primary d-block" data-expiry="${lease.expiry}" data-status="${lease.status}" data-book-no="${lease.book_no}">Calculating...</span>`}
+                    ${getNormalizedStatus(lease) === "reserved" ? `<span class="small fw-bold text-warning d-block">Awaiting pickup</span>` : `<span class="timer small fw-bold d-block" data-expiry="${lease.expiry}" data-status="${lease.status}" data-book-no="${lease.book_no}">Calculating...</span>`}
                     ${getNormalizedStatus(lease) === "reserved" ? `<button class="btn btn-sm btn-outline-danger rounded-pill mt-1 cancel-reservation-btn" onclick="cancelReservation('${lease.book_no}')">Cancel Reservation</button>` : ""}
                   </div>
                 </div>`,
@@ -1758,6 +1812,14 @@
         switchPortalView("catalog");
         hydrateDisplaySettings();
 
+        document.getElementById("closeAccountBtn")?.addEventListener("click", closeAccountModal);
+        document.getElementById("accountOverlay")?.addEventListener("click", closeAccountModal);
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            closeAccountModal();
+          }
+        });
+
         fetchCategories();
         fetchUserActiveReservations();
         loadData();
@@ -2088,11 +2150,35 @@
         }
       }
 
+      function openAccountModal() {
+        const modal = document.getElementById("accountPanel");
+        const overlay = document.getElementById("accountOverlay");
+        if (!modal || !overlay) return;
+        modal.style.display = "block";
+        overlay.style.display = "block";
+        document.body.classList.add("account-open");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeAccountModal() {
+        const modal = document.getElementById("accountPanel");
+        const overlay = document.getElementById("accountOverlay");
+        if (!modal || !overlay) return;
+        modal.style.display = "none";
+        overlay.style.display = "none";
+        document.body.classList.remove("account-open");
+        document.body.style.overflow = "";
+      }
+
       function toggleAccount() {
-        const p = document.getElementById("accountPanel");
-        const shouldOpen = p.style.display !== "block";
-        p.style.display = shouldOpen ? "block" : "none";
-        document.body.classList.toggle("account-open", shouldOpen);
+        const modal = document.getElementById("accountPanel");
+        if (!modal) return;
+        const shouldOpen = modal.style.display !== "block";
+        if (shouldOpen) {
+          openAccountModal();
+        } else {
+          closeAccountModal();
+        }
       }
       function logout() {
         if (dataInterval) {
@@ -2120,8 +2206,7 @@
         document.getElementById("portalSection").style.display = "none";
         document.getElementById("loginSection").style.display = "flex";
         setStudentLoginStep("welcome");
-        document.getElementById("accountPanel").style.display = "none";
-        document.body.classList.remove("account-open");
+        closeAccountModal();
         toggleModal("reserveModal", false);
         document.getElementById("bookContainer").innerHTML = "";
       }
