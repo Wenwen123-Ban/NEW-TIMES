@@ -602,15 +602,6 @@
         flex-shrink: 0;
       }
 
-      .footer-purpose-link {
-        color: #60a5fa;
-        font-weight: 700;
-        text-decoration: none;
-      }
-      .footer-purpose-link:hover {
-        text-decoration: underline;
-      }
-
       .main-footer::before {
         content: "";
         position: absolute;
@@ -824,74 +815,6 @@
       </div>
     </div>
 
-    <div id="registerModal" class="modal-overlay">
-      <div class="custom-modal text-start">
-        <h4 class="fw-bold text-center mb-1">New Application</h4>
-        <p class="text-muted small text-center mb-4">
-          Request access from the Librarian.
-        </p>
-
-        <div
-          class="upload-circle"
-          onclick="document.getElementById('regPhoto').click()"
-        >
-          <i class="fas fa-camera upload-icon" id="uploadIcon"></i>
-          <img id="previewImg" />
-        </div>
-        <input
-          type="file"
-          id="regPhoto"
-          accept="image/*"
-          style="display: none"
-          onchange="previewPhoto(this)"
-        />
-        <p class="text-center small text-muted mb-3" style="font-size: 0.7rem">
-          Tap circle to add ID photo
-        </p>
-
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">Full Name</label>
-          <input
-            type="text"
-            id="regName"
-            class="form-control rounded-pill bg-light border-0 px-3"
-            placeholder="e.g. Juan Dela Cruz"
-          />
-        </div>
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">School ID Number</label>
-          <input
-            type="text"
-            id="regID"
-            class="form-control rounded-pill bg-light border-0 px-3"
-            placeholder="e.g. 2023-0015"
-          />
-        </div>
-        <div class="mb-4">
-          <label class="small fw-bold ms-2">Create Password</label>
-          <input
-            type="password"
-            id="regPass"
-            class="form-control rounded-pill bg-light border-0 px-3"
-            placeholder="••••••••"
-          />
-        </div>
-
-        <button
-          class="btn btn-primary w-100 rounded-pill fw-bold py-2 mb-2 shadow-sm"
-          onclick="submitRegistration()"
-        >
-          SUBMIT REQUEST
-        </button>
-        <button
-          class="btn btn-outline-secondary w-100 rounded-pill fw-bold py-2"
-          onclick="toggleModal('registerModal', false)"
-        >
-          CANCEL
-        </button>
-      </div>
-    </div>
-
     <div id="statusModal" class="modal-overlay">
       <div class="custom-modal">
         <div class="mb-3">
@@ -1000,18 +923,7 @@
           SECURE LOGIN
         </button>
 
-        <div class="d-flex align-items-center my-3">
-          <hr class="flex-grow-1" />
-          <span class="px-2 text-muted small">New Student?</span>
-          <hr class="flex-grow-1" />
-        </div>
-
-        <button
-          class="btn btn-outline-primary w-100 rounded-pill fw-bold"
-          onclick="toggleModal('registerModal', true)"
-        >
-          CREATE ACCOUNT
-        </button>
+        <p class="small text-muted">Registration is managed by the official school database.</p>
 
         <div
           id="loginError"
@@ -1047,11 +959,12 @@
           class="btn btn-sm btn-light rounded-pill border px-3 fw-bold"
           onclick="toggleAccount()"
         >
-          <i class="fas fa-user-circle me-1"></i> Profile
+          <i class="fas fa-user-circle me-1"></i> Account
         </button>
       </nav>
 
       <div id="accountPanel" class="account-dropdown">
+        <p class="fw-bold small text-uppercase text-muted mb-2">My Account</p>
         <div class="d-flex align-items-center mb-3">
           <img
             id="user_pic"
@@ -1081,6 +994,13 @@
           <i class="fas fa-history me-1"></i> Active Leases (<span id="reservationCount">0</span>/5)
         </p>
         <div id="activeHistory" class="mb-3"></div>
+        <div class="mb-3">
+          <p class="fw-bold small text-uppercase text-muted mb-2">Settings</p>
+          <label for="booksPerPageDesktop" class="form-label small mb-1">Books per page (Desktop)</label>
+          <input id="booksPerPageDesktop" type="number" class="form-control form-control-sm mb-2" min="6" max="60" value="20" onchange="saveDisplaySettings()" />
+          <label for="booksPerPageMobile" class="form-label small mb-1">Books per page (Mobile)</label>
+          <input id="booksPerPageMobile" type="number" class="form-control form-control-sm" min="4" max="40" value="10" onchange="saveDisplaySettings()" />
+        </div>
         <button
           class="btn btn-danger btn-sm w-100 rounded-pill fw-bold py-2"
           onclick="logout()"
@@ -1192,8 +1112,8 @@
       let leaderboardProfileModal = null;
       let dataInterval = null;
       let timerInterval = null;
-      const ALL_COLLECTION_LIMIT = 20;
-      const CATEGORY_LIMIT = 10;
+      const DEFAULT_DESKTOP_BOOK_LIMIT = 20;
+      const DEFAULT_MOBILE_BOOK_LIMIT = 10;
       const MAX_ACTIVE_RESERVATIONS = 5;
       const BORROW_DURATION_MS = 2 * 24 * 60 * 60 * 1000;
       let userReservations = {};
@@ -1203,6 +1123,35 @@
       let latestBooksByCode = {};
       let allCollectionOrder = [];
       let categoryCollectionOrder = {};
+
+      function isMobileViewport() {
+        return window.matchMedia("(max-width: 768px)").matches;
+      }
+
+      function getDisplayLimits() {
+        const desktop = Number(localStorage.getItem("lbas_books_desktop") || DEFAULT_DESKTOP_BOOK_LIMIT);
+        const mobile = Number(localStorage.getItem("lbas_books_mobile") || DEFAULT_MOBILE_BOOK_LIMIT);
+        const activeLimit = isMobileViewport() ? mobile : desktop;
+        return { activeLimit, desktop, mobile };
+      }
+
+      function hydrateDisplaySettings() {
+        const { desktop, mobile } = getDisplayLimits();
+        const desktopField = document.getElementById("booksPerPageDesktop");
+        const mobileField = document.getElementById("booksPerPageMobile");
+        if (desktopField) desktopField.value = desktop;
+        if (mobileField) mobileField.value = mobile;
+      }
+
+      function saveDisplaySettings() {
+        const desktop = Number(document.getElementById("booksPerPageDesktop")?.value || DEFAULT_DESKTOP_BOOK_LIMIT);
+        const mobile = Number(document.getElementById("booksPerPageMobile")?.value || DEFAULT_MOBILE_BOOK_LIMIT);
+        localStorage.setItem("lbas_books_desktop", String(Math.min(60, Math.max(6, desktop))));
+        localStorage.setItem("lbas_books_mobile", String(Math.min(40, Math.max(4, mobile))));
+        allCollectionOrder = [];
+        categoryCollectionOrder = {};
+        loadData();
+      }
 
       function shuffleBooks(books) {
         const shuffled = [...books];
@@ -1378,7 +1327,7 @@
                   </div>
                   <div class="text-end">
                     ${getNormalizedStatus(lease) === "reserved" ? `<span class="small fw-bold text-warning d-block">Awaiting pickup</span>` : `<span class="timer small fw-bold text-primary d-block" data-expiry="${lease.expiry}" data-status="${lease.status}" data-book-no="${lease.book_no}">Calculating...</span>`}
-                    ${getNormalizedStatus(lease) === "reserved" ? `<button class="btn btn-sm btn-outline-danger rounded-pill mt-1" onclick="releaseReservation('${lease.book_no}')">Release</button>` : ""}
+                    ${getNormalizedStatus(lease) === "reserved" ? `<button class="btn btn-sm btn-outline-danger rounded-pill mt-1" onclick="cancelReservation('${lease.book_no}')">Cancel Reservation</button>` : ""}
                   </div>
                 </div>`,
             )
@@ -1561,61 +1510,6 @@
           btn.disabled = false;
         }
       }
-
-      function previewPhoto(input) {
-        if (input.files && input.files[0]) {
-          const reader = new FileReader();
-          reader.onload = function (e) {
-            document.getElementById("previewImg").src = e.target.result;
-            document.getElementById("previewImg").style.display = "block";
-            document.getElementById("uploadIcon").style.display = "none";
-          };
-          reader.readAsDataURL(input.files[0]);
-        }
-      }
-
-      async function submitRegistration() {
-        const name = document.getElementById("regName").value;
-        const id = document.getElementById("regID").value;
-        const pwd = document.getElementById("regPass").value;
-        const file = document.getElementById("regPhoto").files[0];
-
-        if (!name || !id || !pwd) return alert("Please fill all fields.");
-
-        const fd = new FormData();
-        fd.append("name", name);
-        fd.append("school_id", id);
-        fd.append("password", pwd);
-        if (file) fd.append("photo", file);
-
-        try {
-          const res = await fetch("/api/register_student", {
-            method: "POST",
-            body: fd,
-          });
-          const data = await res.json();
-
-          toggleModal("registerModal", false); // Close form
-
-          if (data.success) {
-            showStatusPopup(
-              "success",
-              "Application Sent!",
-              "Your request has been forwarded to the Librarian. You cannot log in until approved.",
-            );
-            document.getElementById("regName").value = "";
-            document.getElementById("regID").value = "";
-            document.getElementById("regPass").value = "";
-            document.getElementById("previewImg").src = "";
-            document.getElementById("previewImg").style.display = "none";
-            document.getElementById("uploadIcon").style.display = "block";
-          } else {
-            showStatusPopup(
-              "error",
-              "Registration Failed",
-              data.message || "ID already exists or invalid data.",
-            );
-          }
         } catch (e) {
           alert("Network Error during registration.");
         }
@@ -1776,6 +1670,7 @@
           ? "/Profile/" + profile.photo
           : "/Profile/default.png";
         switchPortalView("catalog");
+        hydrateDisplaySettings();
 
         fetchCategories();
         fetchUserActiveReservations();
@@ -1834,7 +1729,8 @@
           });
 
           if (allCollectionOrder.length === 0) {
-            allCollectionOrder = getRandomizedAllCollection(books, ALL_COLLECTION_LIMIT).map(
+            const { activeLimit } = getDisplayLimits();
+            allCollectionOrder = getRandomizedAllCollection(books, activeLimit).map(
               (book) => book.book_no,
             );
           }
@@ -1845,8 +1741,9 @@
             selectedCategory !== "All" &&
             !categoryCollectionOrder[categoryKey]
           ) {
+            const { activeLimit } = getDisplayLimits();
             categoryCollectionOrder[categoryKey] = shuffleBooks(filtered)
-              .slice(0, CATEGORY_LIMIT)
+              .slice(0, activeLimit)
               .map((book) => book.book_no);
           }
 
@@ -1983,12 +1880,12 @@
         }
       }
 
-      async function releaseReservation(bookNo) {
+      async function cancelReservation(bookNo) {
         if (!currentID || !bookNo) return;
         if (!confirm("Release this reservation?")) return;
 
         try {
-          const res = await fetch("/api/process_transaction", {
+          const res = await fetch("/api/cancel_reservation", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1996,13 +1893,12 @@
             },
             body: JSON.stringify({
               book_no: bookNo,
-              action: "return",
-              school_id: currentID,
+                            school_id: currentID,
             }),
           });
           const data = await res.json();
           if (!res.ok || !data.success) {
-            alert(data.message || "Unable to release reservation.");
+            alert(data.message || "Unable to cancel reservation.");
             return;
           }
 
@@ -2148,6 +2044,7 @@
           document.getElementById("leaderboardProfileModal"),
         );
         fetchCategories();
+        hydrateDisplaySettings();
         const savedID = localStorage.getItem("lbas_id");
         const savedToken = localStorage.getItem("lbas_token");
         if (savedID) {
@@ -2170,11 +2067,7 @@
     <footer class="main-footer">
       <div class="footer-content">
         <p>© 2026 Library Borrowing and Assistance System</p>
-        <p>The Makers of the System</p>
-        <p>
-          Purpose:
-          <a class="footer-purpose-link" href="/creators">Creators Page</a>
-        </p>
+        <p>Research Purpose Only</p>
       </div>
     </footer>
   </body>

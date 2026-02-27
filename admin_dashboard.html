@@ -517,15 +517,6 @@
         animation: fadeUp 0.8s ease;
       }
 
-      .footer-purpose-link {
-        color: #60a5fa;
-        font-weight: 700;
-        text-decoration: none;
-      }
-      .footer-purpose-link:hover {
-        text-decoration: underline;
-      }
-
       .main-footer::before {
         content: "";
         position: absolute;
@@ -651,10 +642,6 @@
         <a class="nav-link text-white active" id="linkConsole" onclick="switchView('console')">
             <span><i class="fas fa-laptop-code me-3"></i>Dashboard</span>
         </a>
-        <a class="nav-link text-white-50" id="linkRequests" onclick="switchView('requests')">
-            <span><i class="fas fa-user-clock me-3"></i>Access Requests</span>
-            <span id="pendingBadge" class="badge bg-danger rounded-pill" style="display:none">0</span>
-        </a>
         <a class="nav-link text-white-50" id="linkUsers" onclick="switchView('users')">
             <span><i class="fas fa-users-cog me-3"></i>User Directory</span>
         </a>
@@ -707,30 +694,7 @@
 
     <div id="consoleView" class="view-section active">
         <div class="row g-4">
-            <div class="col-xl-4">
-                <div class="card glass-card p-4 h-100 border-top border-4 border-success position-relative" id="enrollCard">
-                    <div class="control-lock-overlay">
-                        <i class="fas fa-user-lock lock-icon"></i>
-                        <h5 class="fw-bold text-white">Manual Override</h5>
-                        <p class="text-white-50 small">Log in to create users manually</p>
-                    </div>
-                    <h5 class="fw-bold mb-4"><i class="fas fa-user-plus text-success me-2"></i>Quick Register</h5>
-                    <div class="btn-group w-100 mb-4 shadow-sm">
-                        <button class="btn btn-outline-success active fw-bold" id="btnStudent" onclick="setRole('student')">Student</button>
-                        <button class="btn btn-outline-success fw-bold" id="btnAdmin" onclick="setRole('admin')">Staff</button>
-                    </div>
-                    <div class="mb-3"><input type="text" id="regName" class="form-control bg-light" placeholder="Full Name"></div>
-                    <div class="mb-3"><input type="text" id="regID" class="form-control bg-light" placeholder="Unique ID Number"></div>
-                    <div class="mb-3"><input type="password" id="regPass" class="form-control bg-light" placeholder="Assign Password"></div>
-                    <div class="mb-4">
-                        <label class="small text-muted fw-bold ms-1">Identity Photo</label>
-                        <input type="file" id="regPhoto" class="form-control mt-1">
-                    </div>
-                    <button class="btn btn-success w-100 fw-bold py-2 shadow-sm" onclick="submitUser()">CREATE DATABASE ENTRY</button>
-                </div>
-            </div>
-
-            <div class="col-xl-8">
+            <div class="col-12">
                 <div class="card glass-card p-4 h-100 border-top border-4 border-primary position-relative" id="bulkCard">
                     <div class="control-lock-overlay"><i class="fas fa-database lock-icon"></i><p class="fw-bold text-white">Restricted Access</p></div>
                     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -780,45 +744,12 @@
         </div>
     </div>
 
-    <div id="requestsView" class="view-section">
-        <div class="card glass-card p-4 border-top border-4 border-warning">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-user-clock text-warning me-2"></i>Registration Queue</h5>
-                    <p class="small text-muted mb-0">Review and approve student access requests</p>
-                </div>
-                <button class="btn btn-outline-secondary btn-sm" onclick="loadData()"><i class="fas fa-sync-alt me-2"></i>Check Updates</button>
-            </div>
-            <div class="alert alert-warning border-0 d-flex align-items-center mb-4 rounded-3">
-                <i class="fas fa-info-circle fa-2x me-3 opacity-50"></i>
-                <div>
-                    <h6 class="fw-bold mb-0">Approval Required</h6>
-                    <small>Users in this list cannot log in to LBAS until you click "Approve".</small>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="bg-light text-secondary">
-                        <tr class="small text-uppercase">
-                            <th class="ps-4">Identity</th>
-                            <th>School ID</th>
-                            <th>Full Name</th>
-                            <th>Status</th>
-                            <th class="text-end pe-4">Decision</th>
-                        </tr>
-                    </thead>
-                    <tbody id="requestsBody"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
     <div id="usersView" class="view-section">
         <div class="card glass-card p-4">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     <h5 class="fw-bold mb-0"><i class="fas fa-database text-primary me-2"></i>Master User Database</h5>
-                    <p class="small text-muted mb-0">Manage active student and staff accounts</p>
+                    <p class="small text-muted mb-0">Read-only directory of registered users</p>
                 </div>
                 <div class="d-flex gap-2 w-50 justify-content-end">
                     <select id="userTypeFilter" class="form-select w-25 bg-light border-0 fw-bold" onchange="renderUsersList()">
@@ -838,7 +769,7 @@
                             <th>Full Name</th>
                             <th>Privileges</th>
                             <th>Current State</th>
-                            <th class="text-end pe-4">Actions</th>
+                            <th class="text-end pe-4">Access</th>
                         </tr>
                     </thead>
                     <tbody id="usersListBody"></tbody>
@@ -993,7 +924,6 @@
         masterUsers = [],
         masterAdmins = [],
         masterTransactions = [],
-        pendingRequests = [],
         adminHistory = JSON.parse(localStorage.getItem('adminHistory') || '[]'), 
         isStaff = false, 
         activeFilterCat = 'All',
@@ -1048,19 +978,15 @@
             if (!Array.isArray(masterTransactions)) masterTransactions = [];
             const normalizedUsers = Array.isArray(allUsers) ? allUsers : [];
             
-            masterUsers = normalizedUsers.filter(u => u.status !== 'pending');
-            pendingRequests = normalizedUsers.filter(u => u.status === 'pending');
+            masterUsers = normalizedUsers;
 
             document.getElementById('syncDot').classList.add('sync-online');
             document.getElementById('systemStateText').innerText = "Live & Synced";
-            
-            updatePendingBadge();
             activeFilterCat = resetFilter ? 'All' : preservedFilterCat;
             renderCategoryPills();
             filterInventory(); // Re-apply active category/search filters to fresh data
             syncMonitor();
             renderUsersList();
-            renderRequestsList();
             renderAdminHistory();
             
         } catch(e) { 
@@ -1188,14 +1114,6 @@
     }
 
     // --- STANDARD UI LOGIC (RETAINED) ---
-    function updatePendingBadge() {
-        const badge = document.getElementById('pendingBadge');
-        if(pendingRequests.length > 0) {
-            badge.innerText = pendingRequests.length;
-            badge.style.display = 'inline-block';
-            badge.classList.add('animate-pulse');
-        } else { badge.style.display = 'none'; }
-    }
 
     function switchView(view) {
         document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
@@ -1204,7 +1122,6 @@
 
         const linkMap = {
             'console': { id: 'linkConsole', title: 'Command Dashboard' },
-            'requests': { id: 'linkRequests', title: 'Registration Queue' },
             'users': { id: 'linkUsers', title: 'User Directory' },
             'inventory': { id: 'linkInventory', title: 'Inventory Manager' },
             'leaderboard': { id: 'linkLeaderboard', title: 'Monthly Leaderboards' }
@@ -1222,35 +1139,7 @@
             link.classList.remove('text-white-50');
             document.getElementById('viewTitle').innerText = target.title;
         }
-        if(view === 'requests') renderRequestsList();
         if(view === 'leaderboard') loadAdminLeaderboards();
-    }
-
-    function renderRequestsList() {
-        const tbody = document.getElementById('requestsBody');
-        tbody.innerHTML = pendingRequests.map(u => `
-            <tr>
-                <td class="ps-4"><img src="/Profile/${u.photo || 'default.png'}" class="user-row-img shadow-sm"></td>
-                <td><code class="fw-bold text-dark">${u.school_id}</code></td>
-                <td class="fw-bold">${u.name}</td>
-                <td><span class="badge badge-pending">PENDING</span></td>
-                <td class="text-end pe-4">
-                    <button class="btn btn-sm btn-success me-2 fw-bold px-3" onclick="decideRequest('${u.school_id}', 'approve')">Approve</button>
-                    <button class="btn btn-sm btn-outline-danger fw-bold px-3" onclick="decideRequest('${u.school_id}', 'reject')">Reject</button>
-                </td>
-            </tr>
-        `).join('') || '<tr><td colspan="5" class="text-center py-5 text-muted fw-bold">No pending registrations.</td></tr>';
-    }
-
-    async function decideRequest(id, action) {
-        if(!isStaff) return alert("Security Lock Active");
-        if(!confirm(`Confirm ${action.toUpperCase()}?`)) return;
-        // Note: Ensure /api/approve_user exists in backend, otherwise this will fail silently
-        const endpoint = action === 'approve' ? '/api/approve_user' : '/api/reject_user';
-        try {
-            const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ school_id: id }) });
-            if((await res.json()).success) { loadData(); }
-        } catch(e) {}
     }
 
     function renderUsersList() {
@@ -1267,7 +1156,7 @@
                 <td class="fw-bold">${u.name}</td>
                 <td><span class="badge ${u.type === 'admin' ? 'bg-danger' : 'bg-primary'}">${u.type.toUpperCase()}</span></td>
                 <td><span class="status-pill badge-available">Active</span></td>
-                <td class="text-end pe-4">${isStaff ? `<button class="btn btn-sm btn-light border" onclick="deleteRecord('user', '${u.school_id}', '${u.type}')"><i class="fas fa-trash text-danger"></i></button>` : '<i class="fas fa-lock text-muted"></i>'}</td>
+                <td class="text-end pe-4"><i class='fas fa-eye text-muted'></i></td>
             </tr>`).join('') || '<tr><td colspan="6" class="text-center py-5 text-muted">No records found.</td></tr>';
     }
 
@@ -1399,19 +1288,6 @@
         loadData(true);
     }
 
-    async function submitUser() {
-        if(!isStaff) return alert("System Locked");
-        const fd = new FormData();
-        fd.append('name', document.getElementById('regName').value);
-        fd.append('school_id', document.getElementById('regID').value);
-        fd.append('password', document.getElementById('regPass').value);
-        const photo = document.getElementById('regPhoto').files[0];
-        if(photo) fd.append('photo', photo);
-        const endpoint = (currentRole === 'admin') ? '/api/register_librarian' : '/api/register_student';
-        const res = await fetch(endpoint, { method: 'POST', body: fd });
-        if((await res.json()).success) { addHistory(`Manual Register: ${document.getElementById('regID').value}`); alert("User Added"); loadData(); }
-    }
-
     function findMemberById(schoolId) {
         const sid = String(schoolId || '').toLowerCase();
         return [...masterUsers, ...masterAdmins].find(u => String(u.school_id || '').toLowerCase() === sid) || null;
@@ -1459,7 +1335,7 @@
 
     async function syncMonitor() {
         const active = masterTransactions.filter(t => t.status === 'Borrowed' || t.status === 'Reserved');
-        document.getElementById('monitorBody').innerHTML = active.map(t => `<tr><td class="ps-4"><span class="status-pill badge-${t.status.toLowerCase()}">${t.status}</span></td><td><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.school_id}</td><td>${t.status === 'Reserved' ? '<span class="small text-warning fw-bold">Awaiting pickup</span>' : `<span class="timer font-monospace fw-bold text-primary" data-expiry="${t.expiry || ''}">...</span>`}</td><td class="text-end pe-4">${isStaff ? `<div class="dropdown d-inline-block"><button class="btn btn-sm btn-light border rounded-circle" data-bs-toggle="dropdown"><i class="fas fa-ellipsis-v"></i></button><ul class="dropdown-menu dropdown-menu-end shadow"><li><button class="dropdown-item" onclick="showTransactionInfo('${t.book_no}')">Info</button></li><li><button class="dropdown-item" onclick="showBorrowedInfo('${t.book_no}')">Borrowed</button></li><li><hr class="dropdown-divider"></li><li><button class="dropdown-item text-danger" onclick="releaseAsset('${t.book_no}')">Release</button></li></ul></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`).join('') || '<tr><td colspan="5" class="text-center py-4 text-muted">No active transactions.</td></tr>';
+        document.getElementById('monitorBody').innerHTML = active.map(t => `<tr><td class="ps-4"><span class="status-pill badge-${t.status.toLowerCase()}">${t.status}</span></td><td><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.school_id}</td><td>${t.status === 'Reserved' ? '<span class="small text-warning fw-bold">Awaiting pickup</span>' : `<span class="timer font-monospace fw-bold text-primary" data-expiry="${t.expiry || ''}">...</span>`}</td><td class="text-end pe-4">${isStaff ? `<div class="dropdown d-inline-block"><button class="btn btn-sm btn-light border rounded-circle" data-bs-toggle="dropdown"><i class="fas fa-ellipsis-v"></i></button><ul class="dropdown-menu dropdown-menu-end shadow"><li><button class="dropdown-item" onclick="showTransactionInfo('${t.book_no}')">Info</button></li><li><button class="dropdown-item" onclick="showBorrowedInfo('${t.book_no}')">Borrowed</button></li><li><hr class="dropdown-divider"></li><li><button class="dropdown-item text-success" onclick="approveReservation('${t.book_no}')">Approve</button></li><li><button class="dropdown-item text-danger" onclick="cancelReservation('${t.book_no}')">Cancel</button></li></ul></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`).join('') || '<tr><td colspan="5" class="text-center py-4 text-muted">No active transactions.</td></tr>';
         updateTimers();
     }
 
@@ -1515,11 +1391,18 @@
             alert('Failed to load leaderboard profile.');
         }
     }
+    async function approveReservation(b_no) {
+        if(!confirm("Approve reservation for " + b_no + "?")) return;
+        const res = await fetch('/api/process_transaction', { method: 'POST', headers: {'Content-Type': 'application/json', ...getAuthHeaders()}, body: JSON.stringify({ book_no: b_no, action: 'borrow' }) });
+        if((await res.json()).success) { addHistory(`Approved Reservation: ${b_no}`); loadData(); }
+    }
 
-    async function releaseAsset(b_no) {
-        if(!confirm("Return " + b_no + "?")) return;
-        const res = await fetch('/api/process_transaction', { method: 'POST', headers: {'Content-Type': 'application/json', ...getAuthHeaders()}, body: JSON.stringify({ book_no: b_no, action: 'return' }) });
-        if((await res.json()).success) { addHistory(`Returned Book: ${b_no}`); loadData(); }
+    async function cancelReservation(b_no) {
+        if(!confirm("Cancel reservation for " + b_no + "?")) return;
+        const tx = masterTransactions.find(t => t.book_no === b_no && t.status === 'Reserved');
+        if (!tx) return alert('Active reservation not found.');
+        const res = await fetch('/api/cancel_reservation', { method: 'POST', headers: {'Content-Type': 'application/json', ...getAuthHeaders()}, body: JSON.stringify({ book_no: b_no, school_id: tx.school_id }) });
+        if((await res.json()).success) { addHistory(`Cancelled Reservation: ${b_no}`); loadData(); }
     }
 
     function updateTimers() {
@@ -1575,19 +1458,6 @@
         card.classList.toggle('active');
         if (card.classList.contains('active')) updateAdminDropdownPosition();
     }
-
-    function setRole(role) { currentRole = role; document.getElementById('btnStudent').classList.toggle('active', role === 'student'); document.getElementById('btnAdmin').classList.toggle('active', role === 'admin'); }
-    function logout() { localStorage.clear(); location.reload(); }
-    function addHistory(msg) { adminHistory.unshift({ msg, time: new Date().toLocaleTimeString() }); localStorage.setItem('adminHistory', JSON.stringify(adminHistory.slice(0, 20))); renderAdminHistory(); }
-    function renderAdminHistory() { const log = document.getElementById('adminActionLog'); if(log) log.innerHTML = adminHistory.map(h => `<div class="history-item"><div class="fw-bold">${h.msg}</div><div class="text-muted smaller">${h.time}</div></div>`).join(''); }
-    function clearHistory() { adminHistory = []; localStorage.removeItem('adminHistory'); renderAdminHistory(); }
-    function setCategoryFilter(cat, el) {
-        activeFilterCat = cat;
-        document.querySelectorAll('.cat-pill')
-            .forEach(p => p.classList.remove('active'));
-        el.classList.add('active');
-        filterInventory();
-    }
     function filterInventory() {
         const q = document.getElementById('inventorySearch').value.toLowerCase();
         const filtered = masterBooks.filter(b =>
@@ -1603,11 +1473,7 @@
     <footer class="main-footer">
       <div class="footer-content">
         <p>© 2026 Library Borrowing and Assistance System</p>
-        <p>The Makers of the System</p>
-        <p>
-          Purpose:
-          <a class="footer-purpose-link" href="/creators">Creators Page</a>
-        </p>
+        <p>Research Purpose Only</p>
       </div>
     </footer>
 </body>
