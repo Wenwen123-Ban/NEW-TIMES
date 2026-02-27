@@ -973,7 +973,7 @@
     <div id="reserveModal" class="modal-overlay">
       <div class="custom-modal text-start">
         <h4 class="fw-bold text-center mb-1">Reserve Book</h4>
-        <p class="text-muted small text-center mb-4">Confirm reservation details.</p>
+        <p class="text-muted small text-center mb-4">Fill out the reservation form for librarian review. There is no 30-minute auto-cancel countdown.</p>
         <div class="mb-3">
           <label class="small fw-bold ms-2">Borrower Name</label>
           <input type="text" id="reserveBorrowerName" class="form-control rounded-pill bg-light border-0 px-3" placeholder="Your full name" />
@@ -982,9 +982,13 @@
           <label class="small fw-bold ms-2">Pickup Location</label>
           <input type="text" id="reservePickupLocation" class="form-control rounded-pill bg-light border-0 px-3" placeholder="e.g. Main Library Counter" />
         </div>
+        <div class="mb-3">
+          <label class="small fw-bold ms-2">Preferred Pickup Schedule</label>
+          <input type="text" id="reservePickupSchedule" class="form-control rounded-pill bg-light border-0 px-3" placeholder="e.g. Tomorrow 10:00 AM" />
+        </div>
         <div class="mb-4">
-          <label class="small fw-bold ms-2">Reservation Note</label>
-          <textarea id="reserveNote" rows="3" class="form-control rounded-4 bg-light border-0 px-3" placeholder="Reason / additional details"></textarea>
+          <label class="small fw-bold ms-2">About Your Reservation</label>
+          <textarea id="reserveNote" rows="3" class="form-control rounded-4 bg-light border-0 px-3" placeholder="Purpose / additional details"></textarea>
         </div>
         <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 mb-2 shadow-sm" onclick="submitReserveForm()">CONFIRM RESERVATION</button>
         <button class="btn btn-outline-secondary w-100 rounded-pill fw-bold py-2" onclick="toggleModal('reserveModal', false)">CANCEL</button>
@@ -1935,6 +1939,7 @@
         document.getElementById("reserveBorrowerName").value =
           document.getElementById("full_name")?.innerText || "";
         document.getElementById("reservePickupLocation").value = "";
+        document.getElementById("reservePickupSchedule").value = "";
         document.getElementById("reserveNote").value = "";
         toggleModal("reserveModal", true);
       }
@@ -1950,10 +1955,13 @@
         const pickupLocation = document
           .getElementById("reservePickupLocation")
           .value.trim();
+        const pickupSchedule = document
+          .getElementById("reservePickupSchedule")
+          .value.trim();
         const reservationNote = document.getElementById("reserveNote").value.trim();
 
-        if (!borrowerName || !pickupLocation) {
-          alert("Please provide borrower name and pickup location.");
+        if (!borrowerName || !pickupLocation || !pickupSchedule) {
+          alert("Please provide borrower name, pickup location, and preferred pickup schedule.");
           return;
         }
         if (pendingReservationRequests.has(no)) return;
@@ -1973,6 +1981,7 @@
               school_id: currentID,
               borrower_name: borrowerName,
               pickup_location: pickupLocation,
+              pickup_schedule: pickupSchedule,
               reservation_note: reservationNote,
             }),
           });
