@@ -655,6 +655,19 @@
       }
 
       @media (max-width: 768px) {
+        .hidden-mobile {
+          display: none !important;
+        }
+
+        .show-login {
+          display: block !important;
+          animation: fadeInUp 0.4s ease;
+        }
+
+        .mobile-login-cta {
+          margin-top: 18px;
+        }
+
         #loginSection::before,
         #portalSection::before {
           backdrop-filter: none !important;
@@ -707,6 +720,17 @@
           -webkit-backdrop-filter: none;
           background: rgba(0, 0, 0, 0.6);
         }
+
+        .welcome-slider-wrap {
+          align-items: stretch;
+          gap: 10px;
+        }
+
+        .welcome-flow-card,
+        .login-card {
+          width: min(100%, 360px);
+          margin: 0 auto;
+        }
       }
 
       @media (max-width: 576px) {
@@ -716,6 +740,17 @@
 
         .system-title h1 {
           font-size: 0.92rem;
+        }
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
         }
       }
 
@@ -906,15 +941,29 @@
           <div class="welcome-icon-badge mb-3"><i class="fas fa-graduation-cap"></i></div>
           <h3 class="fw-bold text-dark mb-1">Welcome Students!</h3>
           <p class="text-muted small mb-0">Welcome to the Library Borrowing and Assistance System.</p>
+          <button
+            type="button"
+            class="btn btn-outline-light btn-sm rounded-pill fw-bold mobile-login-cta d-md-none"
+            onclick="jumpToStudentLogin()"
+          >
+            Continue
+          </button>
         </div>
 
         <div id="studentManualStep" class="welcome-flow-card hidden-step">
           <div class="welcome-icon-badge mb-3"><i class="fas fa-circle-info"></i></div>
           <h4 class="fw-bold text-dark mb-2">Quick Manual</h4>
           <p class="text-muted small mb-0">Hi students Be Responsible Borrower and making a responsible Reservations of the books and good luck studying!</p>
+          <button
+            type="button"
+            class="btn btn-outline-light btn-sm rounded-pill fw-bold mobile-login-cta d-md-none"
+            onclick="jumpToStudentLogin()"
+          >
+            Login Now
+          </button>
         </div>
 
-        <div id="studentLoginCard" class="login-card hidden-step">
+        <div id="studentLoginCard" class="login-card hidden-step hidden-mobile">
         <div class="mb-4">
           <div
             class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center shadow-lg"
@@ -1362,11 +1411,19 @@
         const login = document.getElementById("studentLoginCard");
         const prev = document.getElementById("studentPrevBtn");
         const next = document.getElementById("studentNextBtn");
+        const isMobile = window.innerWidth <= 768;
         if (!welcome || !manual || !login) return;
 
         welcome.classList.add("hidden-step");
         manual.classList.add("hidden-step");
         login.classList.add("hidden-step");
+        login.classList.remove("show-login");
+
+        if (isMobile) {
+          login.classList.add("hidden-mobile");
+        } else {
+          login.classList.remove("hidden-mobile");
+        }
 
         if (step === "manual") {
           manual.classList.remove("hidden-step");
@@ -1376,6 +1433,10 @@
         }
         if (step === "login") {
           login.classList.remove("hidden-step");
+          if (isMobile) {
+            login.classList.remove("hidden-mobile");
+            login.classList.add("show-login");
+          }
           if (prev) prev.disabled = false;
           if (next) next.disabled = true;
           return;
@@ -1404,6 +1465,50 @@
         );
         setStudentLoginStep(studentLoginSteps[nextIndex]);
       }
+
+      function jumpToStudentLogin() {
+        setStudentLoginStep("login");
+      }
+
+      function initStudentLoginSwipe() {
+        const slider = document.querySelector(".welcome-slider-wrap");
+        if (!slider) return;
+
+        let startX = 0;
+        let startY = 0;
+
+        slider.addEventListener("touchstart", (event) => {
+          const touch = event.changedTouches?.[0];
+          if (!touch) return;
+          startX = touch.clientX;
+          startY = touch.clientY;
+        }, { passive: true });
+
+        slider.addEventListener("touchend", (event) => {
+          if (window.innerWidth > 768) return;
+          const touch = event.changedTouches?.[0];
+          if (!touch) return;
+
+          const deltaX = touch.clientX - startX;
+          const deltaY = touch.clientY - startY;
+          if (Math.abs(deltaX) < 45 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+
+          shiftStudentLoginStep(deltaX < 0 ? 1 : -1);
+        }, { passive: true });
+      }
+
+      window.addEventListener("resize", () => {
+        const activeStep = studentLoginSteps.find((stepName) => {
+          const map = {
+            welcome: "studentWelcomeStep",
+            manual: "studentManualStep",
+            login: "studentLoginCard",
+          };
+          const el = document.getElementById(map[stepName]);
+          return el && !el.classList.contains("hidden-step");
+        }) || "welcome";
+        setStudentLoginStep(activeStep);
+      });
 
       async function handleLogin() {
         const id = document.getElementById("school_id_input").value.trim();
@@ -2038,6 +2143,7 @@
 
       window.onload = () => {
         setStudentLoginStep("welcome");
+        initStudentLoginSwipe();
         leaderboardProfileModal = new bootstrap.Modal(
           document.getElementById("leaderboardProfileModal"),
         );
