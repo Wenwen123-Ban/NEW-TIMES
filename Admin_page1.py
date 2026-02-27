@@ -768,15 +768,35 @@ def api_process_trans():
     elif action == "borrow":
         target_book = next((b for b in books if b["book_no"] == b_no), None)
 
+        # Resolve active reservation first so librarian approvals can convert reservations
+        # even if the request does not include school_id.
+        reserved_transaction = next(
+            (
+                t
+                for t in reversed(transactions)
+                if t.get("book_no") == b_no and t.get("status") == "Reserved"
+            ),
+            None,
+        )
+
+        if not s_id and reserved_transaction:
+            s_id = str(reserved_transaction.get("school_id", "")).strip().lower()
+
         # Validation: Is it available or reserved by THIS user?
         user_reserved = any(
             t["book_no"] == b_no
-            and t["school_id"] == s_id
+            and str(t.get("school_id", "")).strip().lower() == s_id
             and t["status"] == "Reserved"
             for t in transactions
         )
 
-        if target_book and (target_book["status"] == "Available" or user_reserved):
+        can_borrow = target_book and (
+            target_book.get("status") == "Available"
+            or target_book.get("status") == "Reserved"
+            or user_reserved
+        )
+
+        if can_borrow:
             target_book["status"] = "Borrowed"
 
             # Close reservation if exists
@@ -805,6 +825,7 @@ def api_process_trans():
                     "date": now.strftime("%Y-%m-%d %H:%M"),
                     "expiry": (now + timedelta(days=2)).strftime("%Y-%m-%d %H:%M"),
                     "pickup_location": (previous_reservation or {}).get("pickup_location", ""),
+                    "pickup_schedule": (previous_reservation or {}).get("pickup_schedule", ""),
                     "reservation_note": (previous_reservation or {}).get("reservation_note", ""),
                     "borrower_name": (previous_reservation or {}).get("borrower_name", ""),
                     "reserved_at": (previous_reservation or {}).get("date", ""),
@@ -901,6 +922,7 @@ def api_reserve():
                     "expiry": None,
                     "borrower_name": str(data.get("borrower_name", "")).strip(),
                     "pickup_location": str(data.get("pickup_location", "")).strip(),
+                    "pickup_schedule": str(data.get("pickup_schedule", "")).strip(),
                     "reservation_note": str(data.get("reservation_note", "")).strip(),
                 }
             )
