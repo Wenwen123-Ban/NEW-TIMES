@@ -19,7 +19,7 @@ from flask import (
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__, template_folder=".", static_folder=".")
+app = Flask(__name__)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
