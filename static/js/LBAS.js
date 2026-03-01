@@ -18,6 +18,10 @@ let currentID = null;
       let allCollectionOrder = [];
       let categoryCollectionOrder = {};
       let lbasInitialized = false;
+      let accountSwipeStartX = null;
+      let accountSwipeStartY = null;
+      let accountSwipeCloseTriggered = false;
+      const ACCOUNT_SWIPE_CLOSE_THRESHOLD = 80;
 
       function isMobileViewport() {
         return window.matchMedia("(max-width: 768px)").matches;
@@ -920,8 +924,9 @@ let currentID = null;
         if (!modal || !overlay) return;
         modal.classList.add("active");
         overlay.classList.add("active");
-        document.body.classList.add("account-open");
-        document.body.style.overflow = "hidden";
+        if (!isMobileViewport()) {
+          document.body.classList.add("account-open");
+        }
       }
 
       function closeAccountModal() {
@@ -931,7 +936,52 @@ let currentID = null;
         modal.classList.remove("active");
         overlay.classList.remove("active");
         document.body.classList.remove("account-open");
-        document.body.style.overflow = "";
+      }
+
+      function attachAccountSwipeToClose() {
+        const modal = document.getElementById("accountPanel");
+        if (!modal) return;
+
+        modal.addEventListener(
+          "touchstart",
+          (event) => {
+            if (!isMobileViewport() || !modal.classList.contains("active")) return;
+            const touch = event.touches?.[0];
+            if (!touch) return;
+            accountSwipeStartX = touch.clientX;
+            accountSwipeStartY = touch.clientY;
+            accountSwipeCloseTriggered = false;
+          },
+          { passive: true },
+        );
+
+        modal.addEventListener(
+          "touchmove",
+          (event) => {
+            if (!isMobileViewport() || !modal.classList.contains("active") || accountSwipeCloseTriggered) return;
+            const touch = event.touches?.[0];
+            if (!touch || accountSwipeStartX === null || accountSwipeStartY === null) return;
+
+            const deltaX = touch.clientX - accountSwipeStartX;
+            const deltaY = Math.abs(touch.clientY - accountSwipeStartY);
+            const isHorizontalSwipe = Math.abs(deltaX) > deltaY;
+            if (isHorizontalSwipe && deltaX > ACCOUNT_SWIPE_CLOSE_THRESHOLD) {
+              accountSwipeCloseTriggered = true;
+              closeAccountModal();
+            }
+          },
+          { passive: true },
+        );
+
+        modal.addEventListener(
+          "touchend",
+          () => {
+            accountSwipeStartX = null;
+            accountSwipeStartY = null;
+            accountSwipeCloseTriggered = false;
+          },
+          { passive: true },
+        );
       }
 
       function toggleAccount() {
@@ -993,6 +1043,7 @@ let currentID = null;
         });
         document.getElementById("closeAccountBtn")?.addEventListener("click", closeAccountModal);
         document.getElementById("accountOverlay")?.addEventListener("click", closeAccountModal);
+        attachAccountSwipeToClose();
         document.addEventListener("keydown", (event) => {
           if (event.key === "Escape") {
             closeAccountModal();

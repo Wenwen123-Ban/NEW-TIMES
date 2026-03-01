@@ -323,8 +323,9 @@
         z-index: 1000;
         max-height: calc(100vh - 120px);
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         overflow-x: hidden;
-        transition: right 0.4s ease;
+        transition: right 0.3s ease;
       }
 
       #accountPanel.active,
@@ -354,6 +355,11 @@
         justify-content: space-between;
         align-items: center;
         gap: 10px;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #111;
+        padding: 8px 0;
       }
 
       #closeAccountBtn {
@@ -361,10 +367,17 @@
         background: rgba(255, 255, 255, 0.1);
         color: #fff;
         border-radius: 999px;
-        width: 34px;
-        height: 34px;
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
         line-height: 1;
         font-weight: 700;
+        touch-action: manipulation;
+      }
+
+      body.account-open {
+        overflow: hidden;
       }
 
       .reservation-card {
@@ -787,14 +800,16 @@
           right: -100%;
           left: auto;
           bottom: auto;
-          width: min(92vw, 400px);
+          width: 100%;
           max-height: 100vh;
           height: 100vh;
           border-radius: 0;
           border-bottom: 0;
           padding: 16px;
           overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
           overflow-x: hidden;
+          padding-top: calc(16px + env(safe-area-inset-top, 0px));
         }
 
         #accountPanel.active,
@@ -855,9 +870,16 @@
           margin-top: 0.55rem !important;
         }
 
+        .account-modal-header {
+          top: calc(-16px - env(safe-area-inset-top, 0px));
+          padding-top: calc(16px + env(safe-area-inset-top, 0px));
+          margin: -16px -16px 8px;
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+
         body.account-open {
-          overflow: hidden;
-          touch-action: none;
+          overflow: auto;
         }
       }
 
