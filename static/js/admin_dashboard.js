@@ -10,9 +10,55 @@ let currentRole = 'student',
         staffSessionID = localStorage.getItem('adminSchoolId') || '',
         staffSessionToken = localStorage.getItem('adminToken') || '';
 
+    function getAuthToken() {
+        return localStorage.getItem('token') || staffSessionToken || localStorage.getItem('adminToken') || '';
+    }
+
     function getAuthHeaders() {
-        const token = staffSessionToken || localStorage.getItem('adminToken') || '';
-        return token ? { Authorization: token } : {};
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': getAuthToken()
+        };
+    }
+
+    function setConnectionStatus(isOnline, message) {
+        const syncDot = document.getElementById('syncDot');
+        const statusText = document.getElementById('systemStateText');
+        if (!syncDot || !statusText) return;
+        syncDot.classList.toggle('sync-online', isOnline);
+        statusText.innerText = message;
+    }
+
+    async function apiFetch(url, options = {}, requiresAuth = true) {
+        const config = {
+            ...options,
+            headers: {
+                ...(requiresAuth ? getAuthHeaders() : {'Content-Type': 'application/json'}),
+                ...(options.headers || {})
+            }
+        };
+
+        try {
+            const response = await fetch(url, config);
+            if (response.status === 401) {
+                const unauthorizedError = new Error(`Unauthorized: ${url}`);
+                unauthorizedError.code = 'UNAUTHORIZED';
+                throw unauthorizedError;
+            }
+            if (!response.ok) {
+                const apiError = new Error(`Request failed (${response.status}): ${url}`);
+                apiError.code = 'API_ERROR';
+                apiError.status = response.status;
+                throw apiError;
+            }
+            return response;
+        } catch (error) {
+            console.error(error);
+            if (!error.code) {
+                error.code = 'NETWORK_ERROR';
+            }
+            throw error;
+        }
     }
 
     let editModal;
@@ -32,6 +78,7 @@ let currentRole = 'student',
             executeUnlock(localStorage.getItem('adminName'), localStorage.getItem('adminPhoto'), localStorage.getItem('adminSchoolId'), localStorage.getItem('adminToken'));
         }
         loadData(true);
+        heartbeatCheck();
         setInterval(() => {
             const liveClock = document.getElementById('liveClock');
             if (liveClock) {
@@ -42,25 +89,24 @@ let currentRole = 'student',
         setInterval(() => {
             loadData(false);
         }, 10000);
+
+        setInterval(() => {
+            heartbeatCheck();
+        }, 5000);
     });
 
     async function loadData(resetFilter = false) {
         try {
             const preservedFilterCat = activeFilterCat;
-            const authHeaders = getAuthHeaders();
             console.log('[ADMIN] fetch -> /api/books /api/users /api/admins /api/transactions');
             const [bRes, uRes, aRes, tRes] = await Promise.all([
-                fetch('/api/books', { headers: authHeaders }),
-                fetch('/api/users', { headers: authHeaders }), 
-                fetch('/api/admins', { headers: authHeaders }),
-                fetch('/api/transactions', { headers: authHeaders })
+                apiFetch('/api/books'),
+                apiFetch('/api/users'), 
+                apiFetch('/api/admins'),
+                apiFetch('/api/transactions')
             ]);
             console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status });
 
-            if ([bRes, uRes, aRes, tRes].some(res => !res.ok)) {
-                throw new Error('Unauthorized or failed API request');
-            }
-            
             masterBooks = await bRes.json();
             const allUsers = await uRes.json();
             masterAdmins = await aRes.json();
@@ -73,19 +119,34 @@ let currentRole = 'student',
             
             masterUsers = normalizedUsers;
 
-            document.getElementById('syncDot').classList.add('sync-online');
-            document.getElementById('systemStateText').innerText = "Live & Synced";
+            setConnectionStatus(true, 'Live & Synced');
             activeFilterCat = resetFilter ? 'All' : preservedFilterCat;
             renderCategoryPills();
             filterInventory(); // Re-apply active category/search filters to fresh data
             syncMonitor();
             renderUsersList();
-            renderAdminHistory();
+            await renderAdminHistory();
             
         } catch(e) { 
             console.error("Data Sync Failed", e); 
-            document.getElementById('syncDot').classList.remove('sync-online');
-            document.getElementById('systemStateText').innerText = "Connection Lost";
+            if (e.code === 'UNAUTHORIZED') {
+                setConnectionStatus(true, 'Unauthorized');
+                return;
+            }
+            setConnectionStatus(false, 'Connection Lost');
+        }
+    }
+
+    async function heartbeatCheck() {
+        try {
+            await apiFetch('/api/categories', { method: 'GET' }, false);
+            setConnectionStatus(true, 'Live & Synced');
+        } catch (error) {
+            if (error.code === 'UNAUTHORIZED') {
+                setConnectionStatus(true, 'Unauthorized');
+                return;
+            }
+            setConnectionStatus(false, 'Connection Lost');
         }
     }
 
@@ -157,19 +218,22 @@ let currentRole = 'student',
 
     async function executeCategoryDelete(){
         if(!categoryToDelete) return;
+        try {
+            const res = await apiFetch('/api/delete_category',{
+                method:'POST',
+                body:JSON.stringify({category:categoryToDelete})
+            });
 
-        const res = await fetch('/api/delete_category',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({category:categoryToDelete})
-        });
+            const data = await res.json();
 
-        const data = await res.json();
-
-        if(data.success){
-            activeFilterCat = 'All';
-            loadData(true);
-        } else {
+            if(data.success){
+                activeFilterCat = 'All';
+                loadData(true);
+            } else {
+                alert('Delete failed.');
+            }
+        } catch (error) {
+            console.error(error);
             alert('Delete failed.');
         }
 
@@ -183,26 +247,30 @@ let currentRole = 'student',
         const text = document.getElementById('bulkArea').value;
         if(!text.trim()) return alert("Please enter book data.");
 
-        const res = await fetch('/api/bulk_register', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                text: text,
-                category: document.getElementById('batchCategorySelect').value,
-                clear_first: document.getElementById('wipeCheck').checked
-            })
-        });
-        const data = await res.json();
-        
-        if(data.success) {
-            // Handle both legacy and new backend keys
-            const count = data.items_added || data.added || 0;
-            addHistory(`Bulk Import: ${count} books added`);
-            alert(`Success! ${count} books registered.`);
-            loadData(); // Force refresh
-            document.getElementById('bulkArea').value = ''; // Clear input
-        } else {
-            alert("Error: " + (data.message || "Import failed. Check console."));
+        try {
+            const res = await apiFetch('/api/bulk_register', {
+                method: 'POST',
+                body: JSON.stringify({
+                    text: text,
+                    category: document.getElementById('batchCategorySelect').value,
+                    clear_first: document.getElementById('wipeCheck').checked
+                })
+            });
+            const data = await res.json();
+            
+            if(data.success) {
+                // Handle both legacy and new backend keys
+                const count = data.items_added || data.added || 0;
+                addHistory(`Bulk Import: ${count} books added`);
+                alert(`Success! ${count} books registered.`);
+                loadData(); // Force refresh
+                document.getElementById('bulkArea').value = ''; // Clear input
+            } else {
+                alert("Error: " + (data.message || "Import failed. Check console."));
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Import failed. Check console.');
         }
     }
 
@@ -285,33 +353,42 @@ let currentRole = 'student',
         const name = document.getElementById('editName').value;
         let endpoint = type === 'book' ? '/api/update_book' : '/api/update_member';
         let payload = type === 'book' ? { book_no: id, title: name, category: document.getElementById('editCategory').value } : { school_id: id, name: name, type: document.getElementById('editID').dataset.role };
-        const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-        if((await res.json()).success) { editModal.hide(); addHistory(`Updated ${type}: ${id}`); loadData(); }
+        try {
+            const res = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(payload) });
+            if((await res.json()).success) { editModal.hide(); addHistory(`Updated ${type}: ${id}`); loadData(); }
+        } catch (error) {
+            console.error(error);
+        }
     }
 
     async function deleteRecord(type, id, role = '') {
         if(!confirm(`Delete ${type} ${id}?`)) return;
         let endpoint = type === 'book' ? '/api/delete_book' : '/api/delete_member';
         let payload = type === 'book' ? { book_no: id } : { school_id: id, type: role };
-        const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-        if((await res.json()).success) { addHistory(`Deleted ${type}: ${id}`); loadData(); }
+        try {
+            const res = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify(payload) });
+            if((await res.json()).success) { addHistory(`Deleted ${type}: ${id}`); loadData(); }
+        } catch (error) {
+            console.error(error);
+        }
     }
 
     async function attemptLogin() {
         const u = document.getElementById('loginUser').value;
         const p = document.getElementById('loginPass').value;
         try {
-            const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ school_id: u, password: p }) });
+            const res = await apiFetch('/api/login', { method: 'POST', body: JSON.stringify({ school_id: u, password: p }) }, false);
             const data = await res.json();
             if(data.success && data.profile.is_staff) {
                 localStorage.setItem('isStaffAuth', 'true');
                 localStorage.setItem('adminName', data.profile.name);
                 localStorage.setItem('adminPhoto', data.profile.photo);
                 localStorage.setItem('adminSchoolId', data.profile.school_id || u);
+                localStorage.setItem('token', data.token || '');
                 localStorage.setItem('adminToken', data.token || '');
                 executeUnlock(data.profile.name, data.profile.photo, data.profile.school_id || u, data.token || '');
             } else { showLoginError(); }
-        } catch (e) { showLoginError(); }
+        } catch (e) { console.error(e); showLoginError(); }
     }
 
     const adminIntroSteps = ['welcome', 'manual', 'login'];
@@ -457,12 +534,17 @@ let currentRole = 'student',
         const b_no = document.getElementById('borrowBookNo').value;
         const return_due_date = document.getElementById('borrowReturnDate').value;
         if (!return_due_date) return alert('Please set return date.');
-        const res = await fetch('/api/process_transaction', { method: 'POST', headers: {'Content-Type': 'application/json', ...getAuthHeaders()}, body: JSON.stringify({ book_no: b_no, action: 'borrow', return_due_date }) });
-        const data = await res.json();
-        if (!res.ok || !data.success) return alert(data.message || 'Unable to borrow book.');
-        borrowModal.hide();
-        addHistory(`Borrowed Book: ${b_no}`);
-        loadData();
+        try {
+            const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'borrow', return_due_date }) });
+            const data = await res.json();
+            if (!data.success) return alert(data.message || 'Unable to borrow book.');
+            borrowModal.hide();
+            addHistory(`Borrowed Book: ${b_no}`);
+            loadData();
+        } catch (error) {
+            console.error(error);
+            alert('Unable to borrow book.');
+        }
     }
 
     async function syncMonitor() {
@@ -476,7 +558,7 @@ let currentRole = 'student',
     async function loadAdminLeaderboards() {
         if (!isStaff) return;
         try {
-            const leaderboardRes = await fetch('/api/monthly_leaderboard');
+            const leaderboardRes = await apiFetch('/api/monthly_leaderboard');
             const leaderboard = await leaderboardRes.json();
             const borrowers = leaderboard.top_borrowers || [];
             const books = leaderboard.top_books || [];
@@ -501,6 +583,7 @@ let currentRole = 'student',
                 ? books.map((r, i) => `<tr><td class="ps-4 fw-bold">#${r.rank || i + 1}</td><td><code>${r.book_no}</code></td><td>${r.total_borrowed}</td></tr>`).join('')
                 : '<tr><td colspan="3" class="text-center text-muted py-4">No book data this month.</td></tr>';
         } catch (e) {
+            console.error(e);
             document.getElementById('topBorrowersBody').innerHTML = '<tr><td colspan="3" class="text-center text-danger py-4">Failed to load borrowers leaderboard.</td></tr>';
             document.getElementById('topBooksBody').innerHTML = '<tr><td colspan="3" class="text-center text-danger py-4">Failed to load books leaderboard.</td></tr>';
         }
@@ -508,7 +591,7 @@ let currentRole = 'student',
 
     async function openLeaderboardProfile(id) {
         try {
-            const res = await fetch('/api/leaderboard_profile/' + encodeURIComponent(id));
+            const res = await apiFetch('/api/leaderboard_profile/' + encodeURIComponent(id));
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.message || 'Unable to load profile.');
 
@@ -520,21 +603,75 @@ let currentRole = 'student',
             document.getElementById('leaderboardProfileBook').innerText = p.most_borrowed_book || 'No records';
             leaderboardProfileModal.show();
         } catch (e) {
+            console.error(e);
             alert('Failed to load leaderboard profile.');
         }
     }
     async function cancelReservation(b_no) {
         if(!confirm("Release reservation/borrowed record for " + b_no + "?")) return;
-        const tx = masterTransactions.find(t => t.book_no === b_no && t.status === 'Reserved');
-        if (tx) {
-            const res = await fetch('/api/cancel_reservation', { method: 'POST', headers: {'Content-Type': 'application/json', ...getAuthHeaders()}, body: JSON.stringify({ book_no: b_no, school_id: tx.school_id }) });
-            if((await res.json()).success) { addHistory(`Released Reservation: ${b_no}`); loadData(); }
-            return;
+        try {
+            const tx = masterTransactions.find(t => t.book_no === b_no && t.status === 'Reserved');
+            if (tx) {
+                const res = await apiFetch('/api/cancel_reservation', { method: 'POST', body: JSON.stringify({ book_no: b_no, school_id: tx.school_id }) });
+                if((await res.json()).success) { addHistory(`Released Reservation: ${b_no}`); loadData(); }
+                return;
+            }
+            const borrowed = masterTransactions.find(t => t.book_no === b_no && t.status === 'Borrowed');
+            if (!borrowed) return alert('No active reservation/borrowed record found.');
+            const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'return', school_id: borrowed.school_id }) });
+            if((await res.json()).success) { addHistory(`Released Borrowed Book: ${b_no}`); loadData(); }
+        } catch (error) {
+            console.error(error);
         }
-        const borrowed = masterTransactions.find(t => t.book_no === b_no && t.status === 'Borrowed');
-        if (!borrowed) return alert('No active reservation/borrowed record found.');
-        const res = await fetch('/api/process_transaction', { method: 'POST', headers: {'Content-Type': 'application/json', ...getAuthHeaders()}, body: JSON.stringify({ book_no: b_no, action: 'return', school_id: borrowed.school_id }) });
-        if((await res.json()).success) { addHistory(`Released Borrowed Book: ${b_no}`); loadData(); }
+    }
+
+    function addHistory(entry) {
+        const stamp = new Date().toLocaleString();
+        adminHistory.unshift({ entry, stamp });
+        adminHistory = adminHistory.slice(0, 40);
+        localStorage.setItem('adminHistory', JSON.stringify(adminHistory));
+        renderAdminHistory();
+    }
+
+    async function renderAdminHistory() {
+        const container = document.getElementById('adminActionLog');
+        if (!container) return;
+        try {
+            const res = await apiFetch('/api/transactions', { method: 'GET' });
+            const tx = await res.json();
+            const recent = (Array.isArray(tx) ? tx : [])
+                .slice(-10)
+                .reverse()
+                .map(t => ({
+                    entry: `${t.status || 'Activity'} • ${t.book_no || '-'} • ${t.school_id || '-'}`,
+                    stamp: t.date || t.reserved_at || '-'
+                }));
+
+            container.innerHTML = recent.map(r => `<div class="history-item"><div class="fw-bold text-dark">${r.entry}</div><div class="small text-muted">${r.stamp}</div></div>`).join('')
+                || '<div class="small text-muted">No log entries yet.</div>';
+        } catch (error) {
+            console.error(error);
+            container.innerHTML = adminHistory.map(r => `<div class="history-item"><div class="fw-bold text-dark">${r.entry}</div><div class="small text-muted">${r.stamp}</div></div>`).join('')
+                || '<div class="small text-muted">No log entries yet.</div>';
+        }
+    }
+
+    function clearHistory() {
+        adminHistory = [];
+        localStorage.setItem('adminHistory', JSON.stringify(adminHistory));
+        renderAdminHistory();
+    }
+
+    async function logout() {
+        try {
+            await apiFetch('/api/logout', { method: 'POST' });
+        } catch (error) {
+            console.error(error);
+        }
+        localStorage.removeItem('isStaffAuth');
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('token');
+        window.location.reload();
     }
 
     function updateTimers() {
