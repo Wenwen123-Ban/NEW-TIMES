@@ -17,6 +17,7 @@ let currentID = null;
       let latestBooksByCode = {};
       let allCollectionOrder = [];
       let categoryCollectionOrder = {};
+      let lbasInitialized = false;
 
       function isMobileViewport() {
         return window.matchMedia("(max-width: 768px)").matches;
@@ -428,11 +429,21 @@ let currentID = null;
         toggleModal("statusModal", true);
       }
 
+      function escapeHtmlAttr(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
       function renderCategoryFilters() {
         const list = document.getElementById("catFilterList");
-        let html = `<div class="cat-pill ${selectedCategory === "All" ? "active" : ""}" onclick="setCategoryFilter('All')">All Collection</div>`;
+        if (!list) return;
+        let html = `<button type="button" class="cat-pill category-btn ${selectedCategory === "All" ? "active" : ""}" data-category="All">All Collection</button>`;
         availableCategories.forEach((cat) => {
-          html += `<div class="cat-pill ${selectedCategory === cat ? "active" : ""}" onclick="setCategoryFilter('${cat}')">${cat}</div>`;
+          const safeCategory = escapeHtmlAttr(cat);
+          html += `<button type="button" class="cat-pill category-btn ${selectedCategory === cat ? "active" : ""}" data-category="${safeCategory}">${safeCategory}</button>`;
         });
         list.innerHTML = html;
       }
@@ -563,14 +574,6 @@ let currentID = null;
           : "/Profile/default.png";
         switchPortalView("catalog");
         hydrateDisplaySettings();
-
-        document.getElementById("closeAccountBtn")?.addEventListener("click", closeAccountModal);
-        document.getElementById("accountOverlay")?.addEventListener("click", closeAccountModal);
-        document.addEventListener("keydown", (event) => {
-          if (event.key === "Escape") {
-            closeAccountModal();
-          }
-        });
 
         fetchCategories();
         fetchUserActiveReservations();
@@ -824,9 +827,8 @@ let currentID = null;
 
       function setCategoryFilter(cat) {
         selectedCategory = cat;
-        document.querySelectorAll("#catFilterList .cat-pill").forEach((p) => {
-          const isAll = cat === "All" && p.innerText.includes("All");
-          p.classList.toggle("active", p.innerText.trim() === cat || isAll);
+        document.querySelectorAll("#catFilterList .category-btn").forEach((p) => {
+          p.classList.toggle("active", p.dataset.category === cat);
         });
         loadData();
       }
@@ -916,8 +918,8 @@ let currentID = null;
         const modal = document.getElementById("accountPanel");
         const overlay = document.getElementById("accountOverlay");
         if (!modal || !overlay) return;
-        modal.style.display = "block";
-        overlay.style.display = "block";
+        modal.classList.add("active");
+        overlay.classList.add("active");
         document.body.classList.add("account-open");
         document.body.style.overflow = "hidden";
       }
@@ -926,8 +928,8 @@ let currentID = null;
         const modal = document.getElementById("accountPanel");
         const overlay = document.getElementById("accountOverlay");
         if (!modal || !overlay) return;
-        modal.style.display = "none";
-        overlay.style.display = "none";
+        modal.classList.remove("active");
+        overlay.classList.remove("active");
         document.body.classList.remove("account-open");
         document.body.style.overflow = "";
       }
@@ -935,7 +937,7 @@ let currentID = null;
       function toggleAccount() {
         const modal = document.getElementById("accountPanel");
         if (!modal) return;
-        const shouldOpen = modal.style.display !== "block";
+        const shouldOpen = !modal.classList.contains("active");
         if (shouldOpen) {
           openAccountModal();
         } else {
@@ -973,12 +975,30 @@ let currentID = null;
         document.getElementById("bookContainer").innerHTML = "";
       }
 
-      document.addEventListener("DOMContentLoaded", () => {
+      function initializeLBAS() {
+        if (lbasInitialized) return;
+        lbasInitialized = true;
+
         setStudentLoginStep("welcome");
         initStudentLoginSwipe();
         leaderboardProfileModal = new bootstrap.Modal(
           document.getElementById("leaderboardProfileModal"),
         );
+
+        document.addEventListener("click", (e) => {
+          const categoryButton = e.target.closest(".category-btn");
+          if (categoryButton?.dataset.category) {
+            setCategoryFilter(categoryButton.dataset.category);
+          }
+        });
+        document.getElementById("closeAccountBtn")?.addEventListener("click", closeAccountModal);
+        document.getElementById("accountOverlay")?.addEventListener("click", closeAccountModal);
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            closeAccountModal();
+          }
+        });
+
         fetchCategories();
         hydrateDisplaySettings();
         const savedID = localStorage.getItem("lbas_id");
@@ -989,10 +1009,16 @@ let currentID = null;
           fetch("/api/user/" + savedID)
             .then((r) => r.json())
             .then((d) => {
-              if (d.profile && d.profile.status !== "pending")
+              if (d.profile && d.profile.status !== "pending") {
                 initPortal(d.profile);
-              else logout();
+              } else {
+                logout();
+              }
             })
             .catch(logout);
         }
+      }
+
+      document.addEventListener("DOMContentLoaded", function() {
+        initializeLBAS();
       });
