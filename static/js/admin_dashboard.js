@@ -15,34 +15,47 @@ let currentRole = 'student',
         return token ? { Authorization: token } : {};
     }
 
-    const editModal = new bootstrap.Modal(document.getElementById('editModal'));
-    const leaderboardProfileModal = new bootstrap.Modal(document.getElementById('leaderboardProfileModal'));
-    const transactionDetailModal = new bootstrap.Modal(document.getElementById('transactionDetailModal'));
-    const borrowModal = new bootstrap.Modal(document.getElementById('borrowModal'));
+    let editModal;
+    let leaderboardProfileModal;
+    let transactionDetailModal;
+    let borrowModal;
 
-    window.onload = () => {
+    document.addEventListener('DOMContentLoaded', () => {
+        editModal = new bootstrap.Modal(document.getElementById('editModal'));
+        leaderboardProfileModal = new bootstrap.Modal(document.getElementById('leaderboardProfileModal'));
+        transactionDetailModal = new bootstrap.Modal(document.getElementById('transactionDetailModal'));
+        borrowModal = new bootstrap.Modal(document.getElementById('borrowModal'));
+
         mountAdminDropdown();
         showAdminIntroStep('welcome');
         if(localStorage.getItem('isStaffAuth') === 'true') {
             executeUnlock(localStorage.getItem('adminName'), localStorage.getItem('adminPhoto'), localStorage.getItem('adminSchoolId'), localStorage.getItem('adminToken'));
         }
         loadData(true);
-        setInterval(() => { document.getElementById('liveClock').innerText = new Date().toLocaleTimeString(); }, 1000);
+        setInterval(() => {
+            const liveClock = document.getElementById('liveClock');
+            if (liveClock) {
+                liveClock.innerText = new Date().toLocaleTimeString();
+                console.log('[ADMIN] timer tick', liveClock.innerText);
+            }
+        }, 1000);
         setInterval(() => {
             loadData(false);
         }, 10000);
-    };
+    });
 
     async function loadData(resetFilter = false) {
         try {
             const preservedFilterCat = activeFilterCat;
             const authHeaders = getAuthHeaders();
+            console.log('[ADMIN] fetch -> /api/books /api/users /api/admins /api/transactions');
             const [bRes, uRes, aRes, tRes] = await Promise.all([
                 fetch('/api/books', { headers: authHeaders }),
                 fetch('/api/users', { headers: authHeaders }), 
                 fetch('/api/admins', { headers: authHeaders }),
                 fetch('/api/transactions', { headers: authHeaders })
             ]);
+            console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status });
 
             if ([bRes, uRes, aRes, tRes].some(res => !res.ok)) {
                 throw new Error('Unauthorized or failed API request');
