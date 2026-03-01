@@ -234,7 +234,9 @@ let currentID = null;
       async function loadReservations() {
         if (!currentID) return;
         try {
+          console.log("[LBAS] fetch -> /api/transactions (reservations)");
           const tRes = await fetch("/api/transactions");
+          console.log("[LBAS] fetch <- /api/transactions", tRes.status);
           const trans = parseTransactionPayload(await tRes.json());
           syncUserReservations(trans, currentID);
           syncUserActiveLeases(trans, currentID);
@@ -402,10 +404,6 @@ let currentID = null;
         } finally {
           btn.innerText = "SECURE LOGIN";
           btn.disabled = false;
-        }
-      }
-        } catch (e) {
-          alert("Network Error during registration.");
         }
       }
 
@@ -588,10 +586,12 @@ let currentID = null;
           const authHeaders = currentToken
             ? { Authorization: currentToken }
             : {};
+          console.log("[LBAS] fetch -> /api/books + /api/transactions", { hasToken: Boolean(currentToken) });
           const [bRes, tRes] = await Promise.all([
             fetch("/api/books", { headers: authHeaders }),
             fetch("/api/transactions", { headers: authHeaders }),
           ]);
+          console.log("[LBAS] fetch <- statuses", { books: bRes.status, transactions: tRes.status });
 
           if (!bRes.ok) {
             document.getElementById("bookContainer").innerHTML =
@@ -833,7 +833,9 @@ let currentID = null;
 
       function updateTimers() {
         let foundExpiredReservation = false;
+        let timerCount = 0;
         document.querySelectorAll(".timer").forEach((el) => {
+          timerCount += 1;
           if (!el.dataset.expiry) {
             el.innerText = "Awaiting librarian confirmation";
             return;
@@ -852,6 +854,9 @@ let currentID = null;
             el.innerText = `${m}m ${s}s remaining`;
           }
         });
+        if (timerCount > 0) {
+          console.log("[LBAS] timer tick", { timerCount });
+        }
 
         if (foundExpiredReservation) {
           cleanupExpiredReservationsForUser(currentID);
@@ -968,7 +973,7 @@ let currentID = null;
         document.getElementById("bookContainer").innerHTML = "";
       }
 
-      window.onload = () => {
+      document.addEventListener("DOMContentLoaded", () => {
         setStudentLoginStep("welcome");
         initStudentLoginSwipe();
         leaderboardProfileModal = new bootstrap.Modal(
@@ -990,4 +995,4 @@ let currentID = null;
             })
             .catch(logout);
         }
-      };
+      });
