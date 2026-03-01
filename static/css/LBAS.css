@@ -311,20 +311,25 @@
 
       #accountPanel,
       .account-dropdown {
-        display: none;
         position: fixed;
         top: 86px;
-        right: 20px;
-        width: min(420px, calc(100% - 40px));
+        right: -400px;
+        width: min(400px, calc(100% - 24px));
         background: #111;
         color: #fff;
         border: 1px solid rgba(255, 255, 255, 0.28);
         border-radius: 14px;
         padding: 25px;
-        animation: slideDown 0.3s;
         z-index: 1000;
         max-height: calc(100vh - 120px);
         overflow-y: auto;
+        overflow-x: hidden;
+        transition: right 0.4s ease;
+      }
+
+      #accountPanel.active,
+      .account-dropdown.active {
+        right: 20px;
       }
 
       .account-overlay {
@@ -332,7 +337,16 @@
         inset: 0;
         background: rgba(0, 0, 0, 0.6);
         z-index: 999;
-        display: none;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+      }
+
+      .account-overlay.active {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
       }
 
       .account-modal-header {
@@ -769,11 +783,11 @@
 
         #accountPanel,
         .account-dropdown {
-          top: auto;
-          right: 0;
-          left: 0;
-          bottom: 0;
-          width: 100%;
+          top: 0;
+          right: -100%;
+          left: auto;
+          bottom: auto;
+          width: min(92vw, 400px);
           max-height: 100vh;
           height: 100vh;
           border-radius: 0;
@@ -781,7 +795,11 @@
           padding: 16px;
           overflow-y: auto;
           overflow-x: hidden;
-          animation: mobileSheetIn 0.3s ease;
+        }
+
+        #accountPanel.active,
+        .account-dropdown.active {
+          right: 0;
         }
 
         .account-dropdown p,

@@ -61,38 +61,53 @@ let currentRole = 'student',
         }
     }
 
-    let editModal;
+let editModal;
     let leaderboardProfileModal;
     let transactionDetailModal;
     let borrowModal;
+    let dashboardInitialized = false;
 
-    document.addEventListener('DOMContentLoaded', () => {
+    function initializeDashboard() {
+        if (dashboardInitialized) return;
+        dashboardInitialized = true;
+
         editModal = new bootstrap.Modal(document.getElementById('editModal'));
         leaderboardProfileModal = new bootstrap.Modal(document.getElementById('leaderboardProfileModal'));
         transactionDetailModal = new bootstrap.Modal(document.getElementById('transactionDetailModal'));
         borrowModal = new bootstrap.Modal(document.getElementById('borrowModal'));
 
         mountAdminDropdown();
+        bindDashboardDelegatedEvents();
         showAdminIntroStep('welcome');
         if(localStorage.getItem('isStaffAuth') === 'true') {
             executeUnlock(localStorage.getItem('adminName'), localStorage.getItem('adminPhoto'), localStorage.getItem('adminSchoolId'), localStorage.getItem('adminToken'));
         }
         loadData(true);
         heartbeatCheck();
-        setInterval(() => {
-            const liveClock = document.getElementById('liveClock');
-            if (liveClock) {
-                liveClock.innerText = new Date().toLocaleTimeString();
-                console.log('[ADMIN] timer tick', liveClock.innerText);
-            }
-        }, 1000);
-        setInterval(() => {
-            loadData(false);
-        }, 10000);
+        setInterval(updateLiveClock, 1000);
+        setInterval(() => loadData(false), 10000);
+        setInterval(heartbeatCheck, 5000);
+        updateLiveClock();
+    }
 
-        setInterval(() => {
-            heartbeatCheck();
-        }, 5000);
+    function updateLiveClock() {
+        const liveClock = document.getElementById('liveClock');
+        if (!liveClock) return;
+        liveClock.innerText = new Date().toLocaleTimeString();
+    }
+
+    function bindDashboardDelegatedEvents() {
+        document.addEventListener('click', (e) => {
+            const categoryButton = e.target.closest('.category-btn');
+            if (!categoryButton) return;
+            const { category } = categoryButton.dataset;
+            if (!category) return;
+            setCategoryFilter(category, categoryButton);
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        initializeDashboard();
     });
 
     async function loadData(resetFilter = false) {
@@ -160,16 +175,34 @@ let currentRole = 'student',
         
         const container = document.getElementById('categoryPillContainer');
         // Preserve "All" pill
-        let html = `<div class="cat-pill ${activeFilterCat==='All'?'active':''}" onclick="setCategoryFilter('All', this)">All Collections</div>`;
+        let html = `<button type="button" class="cat-pill category-btn ${activeFilterCat==='All'?'active':''}" data-category="All">All Collections</button>`;
         
         uniqueCats.forEach(cat => {
-            const safeCat = String(cat).replace(/'/g, "\\'");
-            html += `<div class="cat-pill ${activeFilterCat===cat?'active':''}" onclick="setCategoryFilter('${safeCat}', this)">${cat}</div>`;
+            const escapedCat = String(cat)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            html += `<button type="button" class="cat-pill category-btn ${activeFilterCat===cat?'active':''}" data-category="${escapedCat}">${escapedCat}</button>`;
         });
         container.innerHTML = html;
         
         // Also update the dropdowns (Bulk & Edit)
         updateDropdowns(uniqueCats);
+    }
+
+    function setCategoryFilter(category, element) {
+        activeFilterCat = category || 'All';
+        const root = document.getElementById('categoryPillContainer');
+        if (root) {
+            root.querySelectorAll('.category-btn').forEach((pill) => {
+                pill.classList.toggle('active', pill.dataset.category === activeFilterCat);
+            });
+        }
+        if (element && element.classList.contains('category-btn')) {
+            element.classList.add('active');
+        }
+        filterInventory();
     }
 
     function updateDropdowns(categories) {
