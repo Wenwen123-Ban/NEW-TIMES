@@ -244,13 +244,20 @@ let editModal;
     function updateDropdowns(categories) {
         const bulkSel = document.getElementById('batchCategorySelect');
         const editSel = document.getElementById('editCategory');
+        if (!bulkSel || !editSel) return;
+
+        const escapeOption = (value) => String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
 
         const currentBulk = bulkSel.value;
-        bulkSel.innerHTML = categories.map(c => `<option value="${c}">Target: ${c}</option>`).join('');
+        bulkSel.innerHTML = categories.map(c => `<option value="${escapeOption(c)}">Target: ${escapeOption(c)}</option>`).join('');
         bulkSel.value = categories.includes(currentBulk) ? currentBulk : (categories[0] || 'General');
 
         const currentEdit = editSel.value;
-        editSel.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        editSel.innerHTML = categories.map(c => `<option value="${escapeOption(c)}">${escapeOption(c)}</option>`).join('');
         editSel.value = categories.includes(currentEdit) ? currentEdit : (categories[0] || 'General');
     }
 
@@ -269,7 +276,10 @@ let editModal;
                 return;
             }
             await loadData();
-            document.getElementById('batchCategorySelect').value = newCat.trim();
+            const savedCategory = (Array.isArray(data.categories)
+                ? data.categories.find((cat) => String(cat).trim().toLowerCase() === newCat.trim().toLowerCase())
+                : null) || newCat.trim();
+            document.getElementById('batchCategorySelect').value = savedCategory;
         } catch (error) {
             console.error(error);
             alert('Unable to add category.');

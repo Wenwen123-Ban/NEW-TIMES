@@ -786,12 +786,15 @@ def api_get_categories():
 
 @app.route("/api/categories", methods=["POST"])
 def api_add_category():
-    category = sanitize_category_name(request.json.get("category"))
+    payload = request.get_json(silent=True) or {}
+    category = sanitize_category_name(payload.get("category") or payload.get("name"))
     if not category:
         return jsonify({"success": False, "message": "Invalid category name"}), 400
 
     categories = get_categories()
-    if category in categories:
+
+    existing_lookup = {str(c).strip().lower() for c in categories}
+    if category.lower() in existing_lookup:
         return jsonify({"success": True, "categories": categories, "created": False})
 
     categories.append(category)
