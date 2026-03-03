@@ -1,7 +1,6 @@
 let currentID = null;
       let currentToken = null;
       let selectedCategory = "All";
-      let selectedStars = 5;
       let availableCategories = [];
       let leaderboardProfileModal = null;
       let dataInterval = null;
@@ -482,7 +481,10 @@ let currentID = null;
         document
           .getElementById("leaderboardMenuBtn")
           .classList.toggle("active", isLeaderboard);
-        if (isLeaderboard) loadLeaderboard();
+        if (isLeaderboard) {
+          loadLeaderboard();
+          loadMonthlyActivityGraph();
+        }
       }
 
       async function loadLeaderboard() {
@@ -514,6 +516,46 @@ let currentID = null;
         } catch (e) {
           document.getElementById("leaderboardBorrowersBody").innerHTML =
             '<tr><td colspan="3" class="text-danger text-center py-4">Unable to load leaderboard.</td></tr>';
+        }
+      }
+
+      async function loadMonthlyActivityGraph() {
+        const chart = document.getElementById("activityChart");
+        const totals = document.getElementById("activityTotals");
+        const monthLabel = document.getElementById("activityMonthLabel");
+        if (!chart || !totals || !monthLabel) return;
+
+        try {
+          const res = await fetch("/api/monthly_activity_logs");
+          const data = await res.json();
+          const days = Array.isArray(data.days) ? data.days : [];
+          const totalsData = data.totals || {};
+
+          monthLabel.innerText = `Month: ${data.month || "-"}`;
+          totals.innerHTML = `Logins: <span class="text-primary">${totalsData.login || 0}</span> • Reservations: <span class="text-success">${totalsData.reserve || 0}</span>`;
+
+          const highest = Math.max(
+            1,
+            ...days.map((d) => Math.max(Number(d.login || 0), Number(d.reserve || 0))),
+          );
+
+          chart.innerHTML = days
+            .map((day) => {
+              const label = String(day.day || "").slice(-2);
+              const loginHeight = Math.round((Number(day.login || 0) / highest) * 100);
+              const reserveHeight = Math.round((Number(day.reserve || 0) / highest) * 100);
+              return `
+                <div class="activity-day">
+                  <div class="activity-bars">
+                    <span class="bar-login" style="height:${loginHeight}%" title="Logins: ${day.login || 0}"></span>
+                    <span class="bar-reserve" style="height:${reserveHeight}%" title="Reservations: ${day.reserve || 0}"></span>
+                  </div>
+                  <div class="activity-day-label">${label}</div>
+                </div>`;
+            })
+            .join("");
+        } catch (error) {
+          chart.innerHTML = '<div class="text-danger small">Unable to load monthly activity logs.</div>';
         }
       }
 
@@ -583,7 +625,6 @@ let currentID = null;
         fetchCategories();
         fetchUserActiveReservations();
         loadData();
-        checkRatingStatus();
         dataInterval = setInterval(loadData, 5000);
         timerInterval = setInterval(updateTimers, 1000);
       }
@@ -591,6 +632,7 @@ let currentID = null;
       async function loadData() {
         if (!currentID) return;
         try {
+          await fetchCategories();
           const authHeaders = currentToken
             ? { Authorization: currentToken }
             : {};
@@ -907,51 +949,8 @@ let currentID = null;
         }
       }
 
-      async function checkRatingStatus() {
-        if (!currentID) return;
-        try {
-          const res = await fetch(`/api/rating_status/${currentID}`);
-          const data = await res.json();
-          document.getElementById("fabReview").style.display = data.show
-            ? "flex"
-            : "none";
-        } catch (e) {}
-      }
-
       function toggleModal(id, show) {
         document.getElementById(id).style.display = show ? "flex" : "none";
-        if (id === "ratingModal" && show) setStars(5);
-      }
-
-      function setStars(count) {
-        selectedStars = count;
-        document
-          .querySelectorAll(".star")
-          .forEach((s, i) => s.classList.toggle("selected", i < count));
-      }
-
-      async function submitRating() {
-        const feedback = document.getElementById("ratingFeedback").value;
-        const res = await fetch("/api/rate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            school_id: currentID,
-            token: currentToken,
-            stars: selectedStars,
-            feedback: feedback,
-          }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          toggleModal("ratingModal", false);
-          checkRatingStatus();
-          showStatusPopup(
-            "success",
-            "Feedback Sent",
-            "Thank you for rating LBAS!",
-          );
-        }
       }
 
       function openAccountModal() {
