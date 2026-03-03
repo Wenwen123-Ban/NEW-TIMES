@@ -404,25 +404,6 @@
         color: #fff !important;
       }
 
-      .rating-fab {
-        position: fixed;
-        bottom: 25px;
-        right: 25px;
-        background: var(--primary);
-        color: var(--accent);
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2000;
-        border: 2px solid var(--accent);
-        font-size: 24px;
-        display: none;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        transition: 0.3s;
-      }
       .modal-overlay {
         position: fixed;
         top: 0;
@@ -450,13 +431,49 @@
         border: 1px solid var(--glass-border);
         color: var(--text-primary-contrast);
       }
-      .star-container {
-        font-size: 35px;
-        color: #cbd5e1;
-        margin: 15px 0;
+      .activity-chart-wrap {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(22px, 1fr));
+        gap: 6px;
+        align-items: end;
+        min-height: 180px;
       }
-      .star.selected {
-        color: var(--text-highlight);
+
+      .activity-day {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .activity-bars {
+        height: 130px;
+        width: 100%;
+        display: flex;
+        align-items: end;
+        justify-content: center;
+        gap: 2px;
+      }
+
+      .bar-login,
+      .bar-reserve {
+        width: 8px;
+        min-height: 2px;
+        border-radius: 6px;
+        display: inline-block;
+      }
+
+      .bar-login {
+        background: #4dabf7;
+      }
+
+      .bar-reserve {
+        background: #51cf66;
+      }
+
+      .activity-day-label {
+        font-size: 10px;
+        color: var(--text-muted-contrast);
       }
 
       #portalSection .container,

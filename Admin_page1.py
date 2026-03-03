@@ -43,13 +43,13 @@ DB_FILES = {
     "admins": "admins.json",
     "users": "users.json",
     "transactions": "transactions.json",
-    "ratings": "ratings.json",
     "config": "system_config.json",
     "tickets": "tickets.json",  # Password Recovery Registry
     "categories": "categories.json",
     "date_restricted": "Date_Restricted.json",
     "reservation_transactions": "reservation_transaction.json",
     "admin_approval_record": "Admin_approval_record.json",
+    "log_rec": "log_rec.json",
 }
 
 ACTIVE_SESSIONS = {}
@@ -133,17 +133,25 @@ def initialize_system():
             if key == "config":
                 initial_data = {
                     "system_version": "7.2 Beta",
-                    "rating_enabled": True,
                     "last_reboot": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 }
             elif key == "categories":
                 initial_data = ["General", "Mathematics", "Science", "Literature"]
             elif key == "date_restricted":
                 initial_data = {}
+            elif key == "log_rec":
+                initial_data = {
+                    "month": datetime.now().strftime("%Y-%m"),
+                    "events": [],
+                }
             else:
                 initial_data = []
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(initial_data, f, indent=4)
+
+    # Remove legacy feedback file if it exists.
+    if os.path.exists("ratings.json"):
+        os.remove("ratings.json")
 
     # Ensure categories are available and in sync with book data
     sync_categories_with_books()
@@ -203,6 +211,87 @@ def save_db(key, data):
             json.dump(data, f, indent=4, ensure_ascii=False)
     except Exception as e:
         logger.error(f"DB WRITE ERROR ({key}): {e}")
+
+
+def _current_month_key():
+    return datetime.now().strftime("%Y-%m")
+
+
+def _ensure_log_registry(reset_if_new_month=True):
+    raw = get_db("log_rec")
+    if not isinstance(raw, dict):
+        raw = {"month": _current_month_key(), "events": []}
+
+    month_key = str(raw.get("month", "")).strip()
+    if not month_key:
+        month_key = _current_month_key()
+
+    if not isinstance(raw.get("events"), list):
+        raw["events"] = []
+
+    if reset_if_new_month and month_key != _current_month_key():
+        raw = {"month": _current_month_key(), "events": []}
+        save_db("log_rec", raw)
+
+    return raw
+
+
+def record_system_event(event_type, school_id=""):
+    payload = _ensure_log_registry(reset_if_new_month=True)
+    payload.setdefault("events", []).append(
+        {
+            "event": str(event_type).strip().lower(),
+            "school_id": str(school_id or "").strip().lower(),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
+    save_db("log_rec", payload)
+
+
+def _monthly_activity_summary():
+    payload = _ensure_log_registry(reset_if_new_month=True)
+    month_key = payload.get("month", _current_month_key())
+    events = payload.get("events", [])
+    login_daily = {}
+    reserve_daily = {}
+
+    for row in events:
+        stamp = _parse_transaction_date(row.get("timestamp"))
+        if not stamp:
+            continue
+        day = stamp.strftime("%Y-%m-%d")
+        event_name = str(row.get("event", "")).strip().lower()
+        if event_name == "login":
+            login_daily[day] = login_daily.get(day, 0) + 1
+        elif event_name == "reserve":
+            reserve_daily[day] = reserve_daily.get(day, 0) + 1
+
+    calendar_days = []
+    try:
+        month_start = datetime.strptime(f"{month_key}-01", "%Y-%m-%d")
+    except ValueError:
+        month_start = datetime.now().replace(day=1)
+
+    cursor = month_start
+    while cursor.month == month_start.month:
+        day = cursor.strftime("%Y-%m-%d")
+        calendar_days.append(
+            {
+                "day": day,
+                "login": login_daily.get(day, 0),
+                "reserve": reserve_daily.get(day, 0),
+            }
+        )
+        cursor += timedelta(days=1)
+
+    return {
+        "month": month_key,
+        "totals": {
+            "login": sum(login_daily.values()),
+            "reserve": sum(reserve_daily.values()),
+        },
+        "days": calendar_days,
+    }
 
 
 def _normalize_date_only(value):
@@ -598,6 +687,7 @@ def api_login():
             "token": token,
             "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
         }
+        record_system_event("login", s_id)
         return jsonify({"success": True, "token": token, "profile": user})
 
     if user.get("password") == pwd:
@@ -606,6 +696,7 @@ def api_login():
             "token": token,
             "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
         }
+        record_system_event("login", s_id)
         return jsonify({"success": True, "token": token, "profile": user})
 
     return jsonify({"success": False, "message": "Invalid Password"}), 401
@@ -1078,6 +1169,7 @@ def api_reserve():
                 reservation_log = []
             reservation_log.append(reservation_payload)
             save_db("reservation_transactions", reservation_log)
+            record_system_event("reserve", s_id)
             return jsonify({"success": True, "request_id": request_id})
 
     if expired_found:
@@ -1087,62 +1179,9 @@ def api_reserve():
     return jsonify({"success": False, "message": "Unavailable"})
 
 
-
-
-@app.route("/api/toggle_rating", methods=["POST"])
-def api_toggle_rating():
-    """Global switch to enable/disable the rating prompt on Tablet/LBAS."""
-    config = get_db("config")
-    current = config.get("rating_enabled", False)
-    config["rating_enabled"] = not current
-    config["last_modified"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-    save_db("config", config)
-    return jsonify({"success": True, "new_state": config["rating_enabled"]})
-
-
-@app.route("/api/rating_status/<school_id>")
-def api_rating_eligibility(school_id):
-    """Checks if a user has already rated to prevent spam."""
-    config = get_db("config")
-    if not config.get("rating_enabled", False):
-        return jsonify({"show": False, "reason": "System Closed"})
-
-    ratings = get_db("ratings")
-    search_id = str(school_id).strip().lower()
-    already_done = any(
-        str(r.get("school_id")).strip().lower() == search_id for r in ratings
-    )
-    return jsonify({"show": not already_done})
-
-
-@app.route("/api/rate", methods=["POST"])
-def api_submit_rating():
-    """Saves student feedback with session token validation."""
-    data = request.json
-    s_id = str(data.get("school_id", "")).strip().lower()
-
-    if not is_session_valid(s_id, data.get("token")):
-        return jsonify({"success": False, "message": "Security Handshake Failed"}), 401
-
-    ratings = get_db("ratings")
-    ratings.append(
-        {
-            "rating_id": str(uuid.uuid4())[:10],
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "school_id": s_id,
-            "stars": int(data.get("stars", 5)),
-            "feedback": data.get("feedback", "N/A"),
-            "platform": "Mobile" if is_mobile_request() else "Tablet",
-        }
-    )
-    save_db("ratings", ratings)
-    return jsonify({"success": True})
-
-
-@app.route("/api/ratings_summary")
-def api_get_ratings():
-    """Data feed for the Developer Analysis dashboard."""
-    return jsonify(get_db("ratings"))
+@app.route("/api/monthly_activity_logs")
+def api_monthly_activity_logs():
+    return jsonify(_monthly_activity_summary())
 
 
 from collections import Counter

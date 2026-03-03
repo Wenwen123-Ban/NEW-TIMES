@@ -3,6 +3,7 @@ let currentRole = 'student',
         masterUsers = [],
         masterAdmins = [],
         masterTransactions = [],
+        masterCategories = [],
         adminHistory = JSON.parse(localStorage.getItem('adminHistory') || '[]'), 
         isStaff = false, 
         activeFilterCat = 'All',
@@ -113,23 +114,26 @@ let editModal;
     async function loadData(resetFilter = false) {
         try {
             const preservedFilterCat = activeFilterCat;
-            console.log('[ADMIN] fetch -> /api/books /api/users /api/admins /api/transactions');
-            const [bRes, uRes, aRes, tRes] = await Promise.all([
+            console.log('[ADMIN] fetch -> /api/books /api/users /api/admins /api/transactions /api/categories');
+            const [bRes, uRes, aRes, tRes, cRes] = await Promise.all([
                 apiFetch('/api/books'),
                 apiFetch('/api/users'), 
                 apiFetch('/api/admins'),
-                apiFetch('/api/transactions')
+                apiFetch('/api/transactions'),
+                apiFetch('/api/categories', { method: 'GET' }, false)
             ]);
-            console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status });
+            console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status, categories: cRes.status });
 
             masterBooks = await bRes.json();
             const allUsers = await uRes.json();
             masterAdmins = await aRes.json();
             masterTransactions = await tRes.json();
+            masterCategories = await cRes.json();
 
             if (!Array.isArray(masterBooks)) masterBooks = [];
             if (!Array.isArray(masterAdmins)) masterAdmins = [];
             if (!Array.isArray(masterTransactions)) masterTransactions = [];
+            if (!Array.isArray(masterCategories)) masterCategories = [];
             const normalizedUsers = Array.isArray(allUsers) ? allUsers : [];
             
             masterUsers = normalizedUsers;
@@ -167,16 +171,13 @@ let editModal;
 
     // --- DYNAMIC CATEGORIES (NEW FEATURE) ---
     function renderCategoryPills() {
-        // Extract unique categories from loaded books
-        const uniqueCats = [...new Set(masterBooks.map(b => b.category))].sort();
-        // Add default ones if missing to keep UI consistent
+        const uniqueCats = [...new Set(masterCategories.map(c => String(c).trim()).filter(Boolean))].sort();
         const defaults = ['General', 'Mathematics', 'Science', 'Literature'];
         defaults.forEach(d => { if(!uniqueCats.includes(d)) uniqueCats.push(d); });
-        
+
         const container = document.getElementById('categoryPillContainer');
-        // Preserve "All" pill
         let html = `<button type="button" class="cat-pill category-btn ${activeFilterCat==='All'?'active':''}" data-category="All">All Collections</button>`;
-        
+
         uniqueCats.forEach(cat => {
             const escapedCat = String(cat)
                 .replace(/&/g, '&amp;')
@@ -186,8 +187,7 @@ let editModal;
             html += `<button type="button" class="cat-pill category-btn ${activeFilterCat===cat?'active':''}" data-category="${escapedCat}">${escapedCat}</button>`;
         });
         container.innerHTML = html;
-        
-        // Also update the dropdowns (Bulk & Edit)
+
         updateDropdowns(uniqueCats);
     }
 
@@ -218,18 +218,25 @@ let editModal;
         editSel.value = categories.includes(currentEdit) ? currentEdit : (categories[0] || 'General');
     }
 
-    function addCustomCategory() {
+    async function addCustomCategory() {
         const newCat = prompt("Enter Name for New Category:");
-        if(newCat && newCat.trim() !== "") {
-            const clean = newCat.trim();
-            // Add to dropdown immediately for use
-            const bulkSel = document.getElementById('batchCategorySelect');
-            const opt = document.createElement("option");
-            opt.value = clean;
-            opt.text = "Target: " + clean;
-            bulkSel.add(opt);
-            bulkSel.value = clean; // Select it automatically
-            alert(`Category "${clean}" created. You can now import books into it.`);
+        if(!newCat || newCat.trim() === "") return;
+
+        try {
+            const res = await apiFetch('/api/categories', {
+                method: 'POST',
+                body: JSON.stringify({ category: newCat.trim() })
+            }, false);
+            const data = await res.json();
+            if (!data.success) {
+                alert(data.message || 'Unable to add category.');
+                return;
+            }
+            await loadData();
+            document.getElementById('batchCategorySelect').value = newCat.trim();
+        } catch (error) {
+            console.error(error);
+            alert('Unable to add category.');
         }
     }
 
