@@ -47,6 +47,9 @@ DB_FILES = {
     "config": "system_config.json",
     "tickets": "tickets.json",  # Password Recovery Registry
     "categories": "categories.json",
+    "date_restricted": "Date_Restricted.json",
+    "reservation_transactions": "reservation_transaction.json",
+    "admin_approval_record": "Admin_approval_record.json",
 }
 
 ACTIVE_SESSIONS = {}
@@ -135,6 +138,8 @@ def initialize_system():
                 }
             elif key == "categories":
                 initial_data = ["General", "Mathematics", "Science", "Literature"]
+            elif key == "date_restricted":
+                initial_data = {}
             else:
                 initial_data = []
             with open(file_path, "w", encoding="utf-8") as f:
@@ -152,6 +157,17 @@ def initialize_system():
             changed = True
     if changed:
         save_db("users", users)
+
+    # MIGRATION: Ensure phone_number exists for users/admins
+    for reg_key in ["users", "admins"]:
+        members = get_db(reg_key)
+        registry_changed = False
+        for member in members:
+            if "phone_number" not in member:
+                member["phone_number"] = ""
+                registry_changed = True
+        if registry_changed:
+            save_db(reg_key, members)
 
     # Ensure Root Admin exists
     admins = get_db("admins")
@@ -187,6 +203,88 @@ def save_db(key, data):
             json.dump(data, f, indent=4, ensure_ascii=False)
     except Exception as e:
         logger.error(f"DB WRITE ERROR ({key}): {e}")
+
+
+def _normalize_date_only(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return ""
+
+
+def _ph_holiday_map(year):
+    # Common Philippine national holidays (fixed-date set).
+    fixed = {
+        "01-01": "New Year's Day",
+        "04-09": "Araw ng Kagitingan",
+        "05-01": "Labor Day",
+        "06-12": "Independence Day",
+        "08-21": "Ninoy Aquino Day",
+        "08-26": "National Heroes Day",
+        "11-01": "All Saints' Day",
+        "11-30": "Bonifacio Day",
+        "12-08": "Feast of the Immaculate Conception",
+        "12-25": "Christmas Day",
+        "12-30": "Rizal Day",
+    }
+    return {f"{year}-{md}": title for md, title in fixed.items()}
+
+
+def _load_manual_date_restrictions():
+    raw = get_db("date_restricted")
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
+def _save_manual_date_restrictions(payload):
+    save_db("date_restricted", payload if isinstance(payload, dict) else {})
+
+
+def _get_date_restriction_status(date_str):
+    date_key = _normalize_date_only(date_str)
+    if not date_key:
+        return {"date": "", "restricted": False, "reason": "", "source": "invalid"}
+
+    day = datetime.strptime(date_key, "%Y-%m-%d")
+    auto_restricted = day.weekday() >= 5
+    auto_reason = "Weekend (Saturday/Sunday)"
+
+    holidays = _ph_holiday_map(day.year)
+    if date_key in holidays:
+        auto_restricted = True
+        auto_reason = f"Philippine National Holiday: {holidays[date_key]}"
+
+    manual = _load_manual_date_restrictions().get(date_key, {})
+    action = str(manual.get("action", "")).strip().lower()
+    reason = str(manual.get("reason", "")).strip()
+
+    if action == "lift":
+        return {
+            "date": date_key,
+            "restricted": False,
+            "reason": reason,
+            "source": "manual_lift",
+        }
+    if action == "ban":
+        return {
+            "date": date_key,
+            "restricted": True,
+            "reason": reason,
+            "source": "manual_ban",
+        }
+
+    return {
+        "date": date_key,
+        "restricted": auto_restricted,
+        "reason": auto_reason if auto_restricted else "",
+        "source": "auto" if auto_restricted else "open",
+    }
 
 
 def sanitize_category_name(value):
@@ -781,6 +879,10 @@ def api_process_trans():
     elif action == "borrow":
         target_book = next((b for b in books if b["book_no"] == b_no), None)
         return_due_date = str(data.get("return_due_date", "")).strip()
+        return_date_status = _get_date_restriction_status(return_due_date)
+        if return_date_status.get("restricted"):
+            reason = return_date_status.get("reason") or "Selected return date is restricted."
+            return jsonify({"success": False, "message": reason}), 400
 
         # Resolve active reservation first so librarian approvals can convert reservations
         # even if the request does not include school_id.
@@ -843,25 +945,31 @@ def api_process_trans():
             except ValueError:
                 parsed_due_date = now + timedelta(days=2)
 
-            transactions.append(
-                {
-                    "book_no": b_no,
-                    "title": (target_book or {}).get("title", ""),
-                    "school_id": chosen_school_id,
-                    "status": "Borrowed",
-                    "date": now.strftime("%Y-%m-%d %H:%M"),
-                    "expiry": parsed_due_date.strftime("%Y-%m-%d"),
-                    "pickup_location": (reserved_transaction or {}).get("pickup_location", ""),
-                    "pickup_schedule": (reserved_transaction or {}).get("pickup_schedule", ""),
-                    "reservation_note": (reserved_transaction or {}).get("reservation_note", ""),
-                    "borrower_name": (reserved_transaction or {}).get("borrower_name", ""),
-                    "reserved_at": (reserved_transaction or {}).get("date", ""),
-                    "request_id": (reserved_transaction or {}).get("request_id")
-                    or str(data.get("request_id", "")).strip()
-                    or generate_request_id(),
-                    "approved_by": str(data.get("approved_by", "")).strip() or "System Librarian",
-                }
-            )
+            approved_record = {
+                "book_no": b_no,
+                "title": (target_book or {}).get("title", ""),
+                "school_id": chosen_school_id,
+                "status": "Borrowed",
+                "date": now.strftime("%Y-%m-%d %H:%M"),
+                "expiry": parsed_due_date.strftime("%Y-%m-%d"),
+                "pickup_location": (reserved_transaction or {}).get("pickup_location", ""),
+                "pickup_schedule": (reserved_transaction or {}).get("pickup_schedule", ""),
+                "reservation_note": (reserved_transaction or {}).get("reservation_note", ""),
+                "borrower_name": (reserved_transaction or {}).get("borrower_name", ""),
+                "phone_number": (reserved_transaction or {}).get("phone_number", ""),
+                "reserved_at": (reserved_transaction or {}).get("date", ""),
+                "request_id": (reserved_transaction or {}).get("request_id")
+                or str(data.get("request_id", "")).strip()
+                or generate_request_id(),
+                "approved_by": str(data.get("approved_by", "")).strip() or "System Librarian",
+            }
+            transactions.append(approved_record)
+
+            approval_log = get_db("admin_approval_record")
+            if not isinstance(approval_log, list):
+                approval_log = []
+            approval_log.append(approved_record)
+            save_db("admin_approval_record", approval_log)
         else:
             return jsonify({"success": False, "message": "Book Unavailable"}), 400
 
@@ -882,6 +990,11 @@ def api_reserve():
     transactions = get_db("transactions")
     now = datetime.now()
     request_id = str(data.get("request_id", "")).strip() or generate_request_id()
+    pickup_schedule = str(data.get("pickup_schedule", "")).strip()
+    pickup_date_status = _get_date_restriction_status(pickup_schedule)
+    if pickup_date_status.get("restricted"):
+        reason = pickup_date_status.get("reason") or "Selected pickup date is restricted."
+        return jsonify({"success": False, "status": "error", "message": reason}), 400
 
     # 1) Cleanup expired reservations for this user before any validation.
     expired_found = False
@@ -943,8 +1056,7 @@ def api_reserve():
 
     for b in books:
         if b["book_no"] == b_no and b["status"] != "Borrowed":
-            transactions.append(
-                {
+            reservation_payload = {
                     "book_no": b_no,
                     "title": b.get("title", ""),
                     "school_id": s_id,
@@ -952,13 +1064,20 @@ def api_reserve():
                     "date": now.strftime("%Y-%m-%d %H:%M"),
                     "expiry": None,
                     "borrower_name": str(data.get("borrower_name", "")).strip(),
+                    "phone_number": str(data.get("phone_number", "")).strip(),
                     "pickup_location": str(data.get("pickup_location", "")).strip(),
-                    "pickup_schedule": str(data.get("pickup_schedule", "")).strip(),
+                    "pickup_schedule": pickup_schedule,
                     "reservation_note": str(data.get("reservation_note", "")).strip(),
                     "request_id": request_id,
                 }
-            )
+            transactions.append(reservation_payload)
             save_db("transactions", transactions)
+
+            reservation_log = get_db("reservation_transactions")
+            if not isinstance(reservation_log, list):
+                reservation_log = []
+            reservation_log.append(reservation_payload)
+            save_db("reservation_transactions", reservation_log)
             return jsonify({"success": True, "request_id": request_id})
 
     if expired_found:
@@ -1026,30 +1145,7 @@ def api_get_ratings():
     return jsonify(get_db("ratings"))
 
 
-import sqlite3
 from collections import Counter
-
-
-def _build_leaderboard_db():
-    """Builds an in-memory SQL table from JSON transactions for monthly leaderboard queries."""
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.execute(
-        "CREATE TABLE transactions (book_no TEXT, school_id TEXT, status TEXT, date TEXT)"
-    )
-
-    for t in get_db("transactions"):
-        conn.execute(
-            "INSERT INTO transactions (book_no, school_id, status, date) VALUES (?, ?, ?, ?)",
-            (
-                str(t.get("book_no", "")).strip(),
-                str(t.get("school_id", "")).strip(),
-                str(t.get("status", "")).strip(),
-                str(t.get("date", "")).strip(),
-            ),
-        )
-    conn.commit()
-    return conn
 
 
 def _parse_transaction_date(raw_date):
@@ -1084,6 +1180,12 @@ def _current_month_borrowed_transactions():
 
 def _build_monthly_leaderboard_payload(limit=10):
     monthly_transactions = _current_month_borrowed_transactions()
+    if not monthly_transactions:
+        monthly_transactions = [
+            tx
+            for tx in get_db("transactions")
+            if str(tx.get("status", "")).strip().lower() in {"borrowed", "returned"}
+        ]
     books_map = {
         str(b.get("book_no", "")).strip().lower(): b for b in get_db("books")
     }
@@ -1130,70 +1232,87 @@ def _build_monthly_leaderboard_payload(limit=10):
             }
         )
 
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.execute(
-        "CREATE TABLE monthly_transactions (book_no TEXT, status TEXT, transaction_date TEXT)"
-    )
-    conn.execute("CREATE TABLE books (book_no TEXT, title TEXT)")
-
+    book_counter = Counter()
     for tx in monthly_transactions:
-        tx_date = _extract_transaction_date(tx)
-        if not tx_date:
-            continue
-        conn.execute(
-            "INSERT INTO monthly_transactions (book_no, status, transaction_date) VALUES (?, ?, ?)",
-            (
-                str(tx.get("book_no", "")).strip(),
-                str(tx.get("status", "")).strip().lower(),
-                tx_date.strftime("%Y-%m-%d %H:%M:%S"),
-            ),
+        book_no = str(tx.get("book_no", "")).strip()
+        if book_no:
+            book_counter[book_no] += 1
+
+    sorted_books = sorted(
+        book_counter.items(), key=lambda item: (-item[1], str(item[0]).lower())
+    )[:limit]
+    top_books = []
+    for idx, (book_no, total) in enumerate(sorted_books, start=1):
+        book = books_map.get(book_no.lower(), {})
+        top_books.append(
+            {
+                "rank": idx,
+                "book_no": book_no,
+                "title": book.get("title") or book_no,
+                "total_borrowed": total,
+            }
         )
-
-    for book in get_db("books"):
-        conn.execute(
-            "INSERT INTO books (book_no, title) VALUES (?, ?)",
-            (
-                str(book.get("book_no", "")).strip(),
-                str(book.get("title", "")).strip(),
-            ),
-        )
-
-    now = datetime.now()
-    rows = conn.execute(
-        """
-        SELECT
-            mt.book_no,
-            COALESCE(NULLIF(b.title, ''), mt.book_no) AS title,
-            COUNT(*) AS total_borrowed
-        FROM monthly_transactions mt
-        LEFT JOIN books b ON LOWER(b.book_no) = LOWER(mt.book_no)
-        WHERE
-            mt.book_no IS NOT NULL
-            AND TRIM(mt.book_no) != ''
-            AND mt.status IN ('borrowed', 'returned')
-            AND CAST(strftime('%m', mt.transaction_date) AS INTEGER) = ?
-            AND CAST(strftime('%Y', mt.transaction_date) AS INTEGER) = ?
-        GROUP BY mt.book_no, title
-        ORDER BY total_borrowed DESC, LOWER(mt.book_no) ASC
-        LIMIT ?
-        """,
-        (now.month, now.year, int(limit)),
-    ).fetchall()
-
-    top_books = [
-        {
-            "rank": idx,
-            "book_no": row["book_no"],
-            "title": row["title"],
-            "total_borrowed": row["total_borrowed"],
-        }
-        for idx, row in enumerate(rows, start=1)
-    ]
-
-    conn.close()
 
     return {"top_borrowers": top_borrowers, "top_books": top_books}
+
+
+@app.route("/api/date_restrictions")
+def api_date_restrictions():
+    year = int(request.args.get("year", datetime.now().year))
+    month = request.args.get("month")
+    items = []
+
+    if month:
+        start = datetime(year, int(month), 1)
+        end = start + timedelta(days=31)
+        while end.month == start.month:
+            end += timedelta(days=1)
+    else:
+        start = datetime(year, 1, 1)
+        end = datetime(year + 1, 1, 1)
+
+    cursor = start
+    while cursor < end:
+        status = _get_date_restriction_status(cursor.strftime("%Y-%m-%d"))
+        items.append(status)
+        cursor += timedelta(days=1)
+
+    return jsonify({"success": True, "items": items})
+
+
+@app.route("/api/date_restrictions/set", methods=["POST"])
+def api_set_date_restriction():
+    if not require_auth():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+    data = request.json or {}
+    date_key = _normalize_date_only(data.get("date"))
+    action = str(data.get("action", "")).strip().lower()
+    reason = str(data.get("reason", "")).strip()
+    if not date_key or action not in {"ban", "lift", "reset"}:
+        return jsonify({"success": False, "message": "Invalid request"}), 400
+
+    restrictions = _load_manual_date_restrictions()
+    if action == "reset":
+        restrictions.pop(date_key, None)
+    else:
+        restrictions[date_key] = {
+            "action": action,
+            "reason": reason,
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    _save_manual_date_restrictions(restrictions)
+
+    return jsonify({"success": True, "item": _get_date_restriction_status(date_key)})
+
+
+@app.route("/api/date_restrictions/check")
+def api_check_date_restriction():
+    date_key = _normalize_date_only(request.args.get("date"))
+    if not date_key:
+        return jsonify({"success": False, "message": "date is required"}), 400
+    status = _get_date_restriction_status(date_key)
+    return jsonify({"success": True, **status})
 
 
 def _is_staff_session_valid():

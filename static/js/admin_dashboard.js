@@ -318,7 +318,8 @@ let editModal;
             'console': { id: 'linkConsole', title: 'Command Dashboard' },
             'users': { id: 'linkUsers', title: 'User Directory' },
             'inventory': { id: 'linkInventory', title: 'Inventory Manager' },
-            'leaderboard': { id: 'linkLeaderboard', title: 'Monthly Leaderboards' }
+            'leaderboard': { id: 'linkLeaderboard', title: 'Monthly Leaderboards' },
+            'dateRestrictions': { id: 'linkDateRestrictions', title: 'Date Restriction Calendar' }
         };
 
         const target = linkMap[view];
@@ -334,6 +335,7 @@ let editModal;
             document.getElementById('viewTitle').innerText = target.title;
         }
         if(view === 'leaderboard') loadAdminLeaderboards();
+        if(view === 'dateRestrictions') loadDateRestrictions();
     }
 
     function renderUsersList() {
@@ -487,6 +489,8 @@ let editModal;
         document.getElementById('authStatusBadge').innerHTML = '<i class="fas fa-check-circle me-2"></i>AUTHORIZED';
         const link = document.getElementById('linkLeaderboard');
         if (link) link.style.display = 'block';
+        const linkDateRestrictions = document.getElementById('linkDateRestrictions');
+        if (linkDateRestrictions) linkDateRestrictions.style.display = 'block';
         addHistory(`System Unlocked by: ${name}`);
         loadData(true);
     }
@@ -560,6 +564,7 @@ let editModal;
         document.getElementById('borrowBookNo').value = bookNo;
         document.getElementById('borrowerName').value = transaction.borrower_name || '-';
         document.getElementById('borrowerId').value = transaction.school_id || '-';
+        document.getElementById('borrowerPhone').value = transaction.phone_number || '-';
         document.getElementById('borrowBookCode').value = transaction.book_no || '-';
         document.getElementById('borrowBookTitle').value = transaction.title || 'Unknown Title';
         document.getElementById('borrowPickupDate').value = transaction.pickup_schedule || transaction.date || '-';
@@ -648,6 +653,55 @@ let editModal;
             alert('Failed to load leaderboard profile.');
         }
     }
+
+    async function loadDateRestrictions() {
+        if (!isStaff) return;
+        const body = document.getElementById('dateRestrictionBody');
+        const statusEl = document.getElementById('restrictionStatus');
+        const selectedDate = document.getElementById('restrictionDate')?.value;
+        try {
+            const now = new Date();
+            const res = await apiFetch(`/api/date_restrictions?year=${now.getFullYear()}`);
+            const data = await res.json();
+            const items = Array.isArray(data.items) ? data.items : [];
+            body.innerHTML = items
+                .filter((item) => item.restricted || item.source !== 'open')
+                .map((item) => `<tr><td>${item.date}</td><td><span class="badge ${item.restricted ? 'bg-danger' : 'bg-success'}">${item.restricted ? 'Restricted' : 'Open'}</span></td><td>${item.source}</td><td>${item.reason || '-'}</td></tr>`)
+                .join('') || '<tr><td colspan="4" class="text-center text-muted py-3">No restrictions found.</td></tr>';
+
+            if (selectedDate) {
+                const checkRes = await apiFetch(`/api/date_restrictions/check?date=${encodeURIComponent(selectedDate)}`);
+                const check = await checkRes.json();
+                statusEl.innerText = check.restricted
+                    ? `Selected date is restricted. ${check.reason || ''}`
+                    : 'Selected date is available.';
+            } else {
+                statusEl.innerText = 'Select a date to inspect status.';
+            }
+        } catch (error) {
+            console.error(error);
+            body.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">Unable to load date restrictions.</td></tr>';
+        }
+    }
+
+    async function saveDateRestriction(action) {
+        const date = document.getElementById('restrictionDate').value;
+        const reason = document.getElementById('restrictionReason').value.trim();
+        if (!date) return alert('Please select a date first.');
+        try {
+            const res = await apiFetch('/api/date_restrictions/set', {
+                method: 'POST',
+                body: JSON.stringify({ date, action, reason })
+            });
+            const data = await res.json();
+            if (!data.success) return alert(data.message || 'Unable to save date restriction.');
+            loadDateRestrictions();
+        } catch (error) {
+            console.error(error);
+            alert('Unable to save date restriction.');
+        }
+    }
+
     async function cancelReservation(b_no) {
         if(!confirm("Release reservation/borrowed record for " + b_no + "?")) return;
         try {

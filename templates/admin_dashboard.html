@@ -87,6 +87,9 @@
         <a class="nav-link text-white-50" id="linkLeaderboard" style="display:none;" onclick="switchView('leaderboard')">
             <span><i class="fas fa-trophy me-3"></i>Leaderboard</span>
         </a>
+        <a class="nav-link text-white-50" id="linkDateRestrictions" style="display:none;" onclick="switchView('dateRestrictions')">
+            <span><i class="fas fa-calendar-xmark me-3"></i>Date Restriction</span>
+        </a>
     </nav>
 
     <div class="mt-auto mb-4">
@@ -261,6 +264,38 @@
     </div>
 </div>
 
+    <div id="dateRestrictionsView" class="view-section">
+        <div class="card glass-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0"><i class="fas fa-calendar-xmark text-danger me-2"></i>Date Restriction Calendar</h5>
+                <button class="btn btn-outline-primary btn-sm" onclick="loadDateRestrictions()">Refresh</button>
+            </div>
+            <p class="text-muted small">Weekends and Philippine national holidays are auto-restricted. Librarian overrides are saved with optional reason.</p>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="small fw-bold">Selected Date</label>
+                    <input type="date" id="restrictionDate" class="form-control">
+                </div>
+                <div class="col-md-8">
+                    <label class="small fw-bold">Reason (optional)</label>
+                    <input type="text" id="restrictionReason" class="form-control" placeholder="Why this date is restricted or lifted">
+                </div>
+            </div>
+            <div class="d-flex gap-2 mb-3">
+                <button class="btn btn-danger" onclick="saveDateRestriction('ban')">Ban Date</button>
+                <button class="btn btn-success" onclick="saveDateRestriction('lift')">Lift Ban</button>
+                <button class="btn btn-secondary" onclick="saveDateRestriction('reset')">Reset Auto Rule</button>
+            </div>
+            <div id="restrictionStatus" class="small text-muted mb-3"></div>
+            <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
+                <table class="table table-sm table-hover">
+                    <thead class="bg-light sticky-top"><tr><th>Date</th><th>Status</th><th>Source</th><th>Reason</th></tr></thead>
+                    <tbody id="dateRestrictionBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 <div class="modal fade" id="leaderboardProfileModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
@@ -316,6 +351,10 @@
                 <div class="mb-2">
                     <label class="small fw-bold mb-1">User ID</label>
                     <input id="borrowerId" type="text" class="form-control" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold mb-1">Phone Number</label>
+                    <input id="borrowerPhone" type="text" class="form-control" readonly>
                 </div>
                 <div class="mb-2">
                     <label class="small fw-bold mb-1">Book Code</label>
