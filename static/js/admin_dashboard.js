@@ -13,7 +13,18 @@ let currentRole = 'student',
         staffSessionToken = localStorage.getItem('adminToken') || '';
 
     function getAuthToken() {
-        return localStorage.getItem('token') || staffSessionToken || localStorage.getItem('adminToken') || '';
+        const adminToken = localStorage.getItem('adminToken') || '';
+        if (adminToken) return adminToken;
+        if (staffSessionToken) return staffSessionToken;
+        return localStorage.getItem('token') || '';
+    }
+
+    function getFallbackAuthToken() {
+        const adminToken = localStorage.getItem('adminToken') || '';
+        const legacyToken = localStorage.getItem('token') || '';
+        const primary = getAuthToken();
+        const candidates = [adminToken, staffSessionToken, legacyToken].filter(Boolean);
+        return candidates.find((token) => token !== primary) || '';
     }
 
     function getAuthHeaders() {
@@ -32,16 +43,35 @@ let currentRole = 'student',
     }
 
     async function apiFetch(url, options = {}, requiresAuth = true) {
-        const config = {
-            ...options,
-            headers: {
-                ...(requiresAuth ? getAuthHeaders() : {'Content-Type': 'application/json'}),
-                ...(options.headers || {})
-            }
+        const requestWithToken = async (authToken = '') => {
+            const authHeaders = requiresAuth
+                ? {
+                    'Content-Type': 'application/json',
+                    ...(authToken ? { 'Authorization': authToken } : {})
+                }
+                : { 'Content-Type': 'application/json' };
+
+            const config = {
+                ...options,
+                headers: {
+                    ...authHeaders,
+                    ...(options.headers || {})
+                }
+            };
+
+            return fetch(url, config);
         };
 
+        const primaryToken = requiresAuth ? getAuthToken() : '';
+
         try {
-            const response = await fetch(url, config);
+            let response = await requestWithToken(primaryToken);
+            if (response.status === 401 && requiresAuth) {
+                const fallbackToken = getFallbackAuthToken();
+                if (fallbackToken) {
+                    response = await requestWithToken(fallbackToken);
+                }
+            }
             if (response.status === 401) {
                 const unauthorizedError = new Error(`Unauthorized: ${url}`);
                 unauthorizedError.code = 'UNAUTHORIZED';
@@ -604,6 +634,10 @@ let editModal;
         isStaff = true;
         staffSessionID = (schoolId || localStorage.getItem('adminSchoolId') || '').toLowerCase();
         staffSessionToken = token || localStorage.getItem('adminToken') || '';
+        if (staffSessionToken) {
+            localStorage.setItem('adminToken', staffSessionToken);
+            localStorage.setItem('token', staffSessionToken);
+        }
         document.getElementById('mainBody').classList.add('is-unlocked');
         document.getElementById('adminWelcomeStep')?.classList.remove('active');
         document.getElementById('adminManualStep')?.classList.remove('active');
