@@ -15,11 +15,13 @@ from flask import (
     redirect,
     url_for,
     make_response,
+    session,
 )
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("LBAS_SECRET_KEY", "lbas-admin-session-secret")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -72,6 +74,18 @@ def require_auth():
         del ACTIVE_SESSIONS[uid]
 
     return None
+
+
+def require_admin_session():
+    admin_id = str(session.get("admin_school_id", "")).strip().lower()
+    if not admin_id or not session.get("is_admin", False):
+        return None
+
+    admin_profile = find_any_user(admin_id)
+    if not admin_profile or not admin_profile.get("is_staff", False):
+        session.clear()
+        return None
+    return admin_id
 
 
 def is_session_valid(user_id, token):
@@ -696,6 +710,12 @@ def api_login():
             "token": token,
             "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
         }
+        if user.get("is_staff", False):
+            session["is_admin"] = True
+            session["admin_school_id"] = s_id
+        else:
+            session.pop("is_admin", None)
+            session.pop("admin_school_id", None)
         record_system_event("login", s_id)
         return jsonify({"success": True, "token": token, "profile": user})
 
@@ -704,12 +724,52 @@ def api_login():
 
 @app.route("/api/logout", methods=["POST"])
 def api_logout():
+    session.clear()
     token = request.headers.get("Authorization")
-    for user_id, session in list(ACTIVE_SESSIONS.items()):
-        if isinstance(session, dict) and session.get("token") == token:
+    for user_id, active_session in list(ACTIVE_SESSIONS.items()):
+        if isinstance(active_session, dict) and active_session.get("token") == token:
             del ACTIVE_SESSIONS[user_id]
             return jsonify({"success": True})
-    return jsonify({"success": False}), 401
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/books")
+def api_admin_get_books():
+    if not require_admin_session():
+        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+    return jsonify(run_auto_sync_engine())
+
+
+@app.route("/api/admin/users")
+def api_admin_get_users():
+    if not require_admin_session():
+        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+    return jsonify(get_db("users"))
+
+
+@app.route("/api/admin/admins")
+def api_admin_get_admins():
+    if not require_admin_session():
+        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+    return jsonify(get_db("admins"))
+
+
+@app.route("/api/admin/transactions")
+def api_admin_get_transactions():
+    if not require_admin_session():
+        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+    return jsonify(get_db("transactions"))
+
+
+@app.route("/api/admin/approval-records")
+def api_admin_get_approval_records():
+    if not require_admin_session():
+        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+
+    records = get_db("admin_approval_record")
+    if not isinstance(records, list):
+        records = []
+    return jsonify(records)
 
 
 @app.route("/api/books")
