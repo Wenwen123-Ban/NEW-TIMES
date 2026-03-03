@@ -117,6 +117,11 @@ def sanitize_creator_name(value):
     return base[:80] or "creator"
 
 
+def generate_request_id(prefix="REQ"):
+    rand = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    return f"{prefix}-{datetime.now().strftime('%Y%m%d')}-{rand}"
+
+
 def initialize_system():
     logger.info("SYSTEM INIT: verifying database integrity...")
     ensure_creators_profile_db()
@@ -312,13 +317,12 @@ def lbas_site():
 
 @app.route("/tablet")
 def tablet_kiosk():
-    """Restored Kiosk Mode for Library Tablet"""
-    return render_template("user_tablet.html")
+    return redirect(url_for("lbas_site"))
 
 
 @app.route("/audit_users")
 def audit_view():
-    return render_template("Admin_users_list.html")
+    return redirect(url_for("index_gateway"))
 
 
 
@@ -481,6 +485,7 @@ def api_login():
     data = request.json
     s_id = str(data.get("school_id", "")).strip().lower()
     pwd = data.get("password")
+    id_only = bool(data.get("id_only", False))
 
     user = find_any_user(s_id)
     if not user:
@@ -488,6 +493,14 @@ def api_login():
 
     if user["status"] == "pending":
         return jsonify({"success": False, "message": "Account Pending Approval"}), 401
+
+    if id_only and not user.get("is_staff", False):
+        token = str(uuid.uuid4())
+        ACTIVE_SESSIONS[s_id] = {
+            "token": token,
+            "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
+        }
+        return jsonify({"success": True, "token": token, "profile": user})
 
     if user.get("password") == pwd:
         token = str(uuid.uuid4())
@@ -843,6 +856,10 @@ def api_process_trans():
                     "reservation_note": (reserved_transaction or {}).get("reservation_note", ""),
                     "borrower_name": (reserved_transaction or {}).get("borrower_name", ""),
                     "reserved_at": (reserved_transaction or {}).get("date", ""),
+                    "request_id": (reserved_transaction or {}).get("request_id")
+                    or str(data.get("request_id", "")).strip()
+                    or generate_request_id(),
+                    "approved_by": str(data.get("approved_by", "")).strip() or "System Librarian",
                 }
             )
         else:
@@ -864,6 +881,7 @@ def api_reserve():
     books = get_db("books")
     transactions = get_db("transactions")
     now = datetime.now()
+    request_id = str(data.get("request_id", "")).strip() or generate_request_id()
 
     # 1) Cleanup expired reservations for this user before any validation.
     expired_found = False
@@ -937,10 +955,11 @@ def api_reserve():
                     "pickup_location": str(data.get("pickup_location", "")).strip(),
                     "pickup_schedule": str(data.get("pickup_schedule", "")).strip(),
                     "reservation_note": str(data.get("reservation_note", "")).strip(),
+                    "request_id": request_id,
                 }
             )
             save_db("transactions", transactions)
-            return jsonify({"success": True})
+            return jsonify({"success": True, "request_id": request_id})
 
     if expired_found:
         save_db("books", books)

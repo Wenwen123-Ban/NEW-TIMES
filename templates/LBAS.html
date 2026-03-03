@@ -101,22 +101,30 @@
     <div id="reserveModal" class="modal-overlay">
       <div class="custom-modal text-start">
         <h4 class="fw-bold text-center mb-1">Reserve Book</h4>
-        <p class="text-muted small text-center mb-4">Review your profile and selected book, then choose pickup date.</p>
+        <p class="text-muted small text-center mb-4">Complete the reservation request details below.</p>
         <div class="mb-3">
-          <label class="small fw-bold ms-2">Borrower Name</label>
+          <label class="small fw-bold ms-2">Borrower/User Name</label>
           <input type="text" id="reserveBorrowerName" class="form-control rounded-pill bg-light border-0 px-3" readonly />
         </div>
         <div class="mb-3">
-          <label class="small fw-bold ms-2">Borrower ID</label>
+          <label class="small fw-bold ms-2">User ID</label>
           <input type="text" id="reserveBorrowerID" class="form-control rounded-pill bg-light border-0 px-3" readonly />
         </div>
         <div class="mb-3">
-          <label class="small fw-bold ms-2">Book Details</label>
-          <input type="text" id="reserveBookDetails" class="form-control rounded-pill bg-light border-0 px-3" readonly />
+          <label class="small fw-bold ms-2">Book Code</label>
+          <input type="text" id="reserveBookCode" class="form-control rounded-pill bg-light border-0 px-3" readonly />
+        </div>
+        <div class="mb-3">
+          <label class="small fw-bold ms-2">Book Title</label>
+          <input type="text" id="reserveBookTitle" class="form-control rounded-pill bg-light border-0 px-3" readonly />
+        </div>
+        <div class="mb-3">
+          <label class="small fw-bold ms-2">Date of Pickup</label>
+          <input type="date" id="reservePickupSchedule" class="form-control rounded-pill bg-light border-0 px-3" />
         </div>
         <div class="mb-4">
-          <label class="small fw-bold ms-2">Pickup Date</label>
-          <input type="date" id="reservePickupSchedule" class="form-control rounded-pill bg-light border-0 px-3" />
+          <label class="small fw-bold ms-2">Request ID (Auto Generated)</label>
+          <input type="text" id="reserveRequestID" class="form-control rounded-pill bg-light border-0 px-3" readonly />
         </div>
         <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 mb-2 shadow-sm" onclick="submitReserveForm()">CONFIRM</button>
         <button class="btn btn-outline-secondary w-100 rounded-pill fw-bold py-2" onclick="toggleModal('reserveModal', false)">CANCEL</button>
@@ -173,21 +181,12 @@
             placeholder="School ID"
           />
         </div>
-        <div class="mb-4">
-          <input
-            type="password"
-            id="password_input"
-            class="form-control form-control-lg text-center bg-light border-0 rounded-pill"
-            placeholder="Password"
-          />
-        </div>
-
         <button
           id="loginBtn"
           class="btn btn-dark btn-lg w-100 rounded-pill fw-bold shadow-sm mb-3"
           onclick="handleLogin()"
         >
-          SECURE LOGIN
+          ID LOGIN
         </button>
 
         <p class="small text-muted">Registration is managed by the official school database.</p>
@@ -237,6 +236,7 @@
           <p id="accountTitle" class="fw-bold small text-uppercase mb-0">My Account</p>
           <button id="closeAccountBtn" type="button" aria-label="Close account panel">✕</button>
         </div>
+        <p class="small text-muted mb-2 d-md-none"><i class="fas fa-mobile-alt me-1"></i>Swipe right or tap the account card again to close.</p>
         <div class="d-flex align-items-center mb-3">
           <img
             id="user_pic"
