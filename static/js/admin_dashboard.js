@@ -98,7 +98,6 @@ let editModal;
     let transactionDetailModal;
     let borrowModal;
     let dashboardInitialized = false;
-    let loginActivityChart = null;
 
     function initializeDashboard() {
         if (dashboardInitialized) return;
@@ -181,7 +180,6 @@ let editModal;
             renderUsersList();
             renderBorrowedBooksList();
             renderBookRegistrationStats();
-            await loadLoginActivityGraph();
             await renderAdminHistory();
             
         } catch(e) { 
@@ -462,66 +460,34 @@ let editModal;
         const borrowed = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'borrowed').length;
         const reserved = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'reserved').length;
         const available = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'available').length;
-        const categories = [...new Set(masterBooks.map((book) => String(book.category || '').trim()).filter(Boolean))].length;
+        const categoryCounts = masterBooks.reduce((acc, book) => {
+            const category = String(book.category || '').trim() || 'Uncategorized';
+            acc[category] = (acc[category] || 0) + 1;
+            return acc;
+        }, {});
+        const categories = Object.keys(categoryCounts).length;
+        const categoryCards = Object.entries(categoryCounts)
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .map(([category, count]) => `
+                <div class="col-sm-6 col-lg-4">
+                    <div class="registration-stat-card">
+                        <div class="registration-stat-label">${category}</div>
+                        <div class="registration-stat-value">${count}</div>
+                    </div>
+                </div>`)
+            .join('');
 
         target.innerHTML = `
             <div class="row g-3">
-                <div class="col-6"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Total Books</div><div class="fw-bold fs-5">${total}</div></div></div>
-                <div class="col-6"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Categories</div><div class="fw-bold fs-5">${categories}</div></div></div>
-                <div class="col-4"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Available</div><div class="fw-bold">${available}</div></div></div>
-                <div class="col-4"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Reserved</div><div class="fw-bold">${reserved}</div></div></div>
-                <div class="col-4"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Borrowed</div><div class="fw-bold">${borrowed}</div></div></div>
+                <div class="col-md-6 col-lg-3"><div class="registration-stat-card"><div class="registration-stat-label">Overall Books</div><div class="registration-stat-value">${total}</div></div></div>
+                <div class="col-md-6 col-lg-3"><div class="registration-stat-card"><div class="registration-stat-label">Total Categories</div><div class="registration-stat-value">${categories}</div></div></div>
+                <div class="col-md-6 col-lg-2"><div class="registration-stat-card"><div class="registration-stat-label">Available</div><div class="registration-stat-value">${available}</div></div></div>
+                <div class="col-md-6 col-lg-2"><div class="registration-stat-card"><div class="registration-stat-label">Reserved</div><div class="registration-stat-value">${reserved}</div></div></div>
+                <div class="col-md-6 col-lg-2"><div class="registration-stat-card"><div class="registration-stat-label">Borrowed</div><div class="registration-stat-value">${borrowed}</div></div></div>
+            </div>
+            <div class="row g-3 mt-1">
+                ${categoryCards || '<div class="col-12"><div class="registration-stat-card text-center">No registered categories yet.</div></div>'}
             </div>`;
-    }
-
-    async function loadLoginActivityGraph() {
-        const canvas = document.getElementById('loginActivityChart');
-        if (!canvas || typeof Chart === 'undefined') return;
-        try {
-            const res = await apiFetch('/api/monthly_activity_logs', { method: 'GET' }, false);
-            const data = await res.json();
-            const points = Array.isArray(data.days) ? data.days : [];
-            const labels = points.map((row) => row.day.slice(-2));
-            const loginSeries = points.map((row) => Number(row.login || 0));
-
-            const monthLabel = document.getElementById('loginGraphMonthLabel');
-            if (monthLabel) {
-                monthLabel.innerText = data.month || 'Current Month';
-            }
-
-            if (loginActivityChart) {
-                loginActivityChart.destroy();
-            }
-
-            loginActivityChart = new Chart(canvas, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Logins',
-                        data: loginSeries,
-                        borderColor: '#198754',
-                        backgroundColor: 'rgba(25, 135, 84, 0.2)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, ticks: { precision: 0 } }
-                    },
-                    plugins: {
-                        legend: { display: false }
-                    }
-                }
-            });
-        } catch (error) {
-            console.error(error);
-        }
     }
 
     function openEdit(type, id, name, extra) {
