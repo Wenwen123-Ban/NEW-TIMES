@@ -304,15 +304,43 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
             <div class="modal-header border-0 pb-0">
-                <h5 class="fw-bold mb-0">Borrow Book</h5>
+                <h5 class="fw-bold mb-0">Borrowed Approval Form</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <input type="hidden" id="borrowBookNo">
-                <div class="mb-2 small text-muted">Borrower</div>
-                <div id="borrowMeta" class="border rounded-3 p-3 bg-light small mb-3"></div>
-                <label class="small fw-bold mb-1">Return Date</label>
-                <input id="borrowReturnDate" type="date" class="form-control mb-3">
+                <div class="mb-2">
+                    <label class="small fw-bold mb-1">Borrower/User Name</label>
+                    <input id="borrowerName" type="text" class="form-control" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold mb-1">User ID</label>
+                    <input id="borrowerId" type="text" class="form-control" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold mb-1">Book Code</label>
+                    <input id="borrowBookCode" type="text" class="form-control" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold mb-1">Book Title</label>
+                    <input id="borrowBookTitle" type="text" class="form-control" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold mb-1">Date to Pickup</label>
+                    <input id="borrowPickupDate" type="text" class="form-control" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold mb-1">Approved By</label>
+                    <input id="borrowApprovedBy" type="text" class="form-control" readonly>
+                </div>
+                <div class="mb-2">
+                    <label class="small fw-bold mb-1">Date to be Returned</label>
+                    <input id="borrowReturnDate" type="date" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold mb-1">Request ID</label>
+                    <input id="borrowRequestId" type="text" class="form-control" readonly>
+                </div>
                 <button class="btn btn-primary w-100 fw-bold" onclick="submitBorrowForm()">Confirm Borrow</button>
             </div>
         </div>

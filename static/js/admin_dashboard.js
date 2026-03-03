@@ -410,7 +410,7 @@ let editModal;
         const u = document.getElementById('loginUser').value;
         const p = document.getElementById('loginPass').value;
         try {
-            const res = await apiFetch('/api/login', { method: 'POST', body: JSON.stringify({ school_id: u, password: p }) }, false);
+            const res = await apiFetch('/api/login', { method: 'POST', body: JSON.stringify({ school_id: u, password: p, id_only: false }) }, false);
             const data = await res.json();
             if(data.success && data.profile.is_staff) {
                 localStorage.setItem('isStaffAuth', 'true');
@@ -547,6 +547,8 @@ let editModal;
                 <div class="mt-1"><span class="fw-bold text-dark">Return Due Date:</span> ${transaction.expiry || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Reserved At:</span> ${transaction.reserved_at || transaction.date || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Pickup Schedule:</span> ${transaction.pickup_schedule || 'Not specified'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Approved By:</span> ${transaction.approved_by || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Request ID:</span> ${transaction.request_id || '-'}</div>
             </div>`;
         transactionDetailModal.show();
     }
@@ -554,11 +556,15 @@ let editModal;
     function openBorrowForm(bookNo) {
         const transaction = getLatestTransactionForBook(bookNo, ['Reserved']);
         if (!transaction) return alert('No active reservation found.');
+        const approvedBy = `${localStorage.getItem('adminName') || 'Librarian'} (${localStorage.getItem('adminSchoolId') || '-'})`;
         document.getElementById('borrowBookNo').value = bookNo;
-        document.getElementById('borrowMeta').innerHTML = `
-            <div><span class="fw-bold">Name:</span> ${transaction.borrower_name || '-'}</div>
-            <div><span class="fw-bold">ID:</span> ${transaction.school_id || '-'}</div>
-            <div><span class="fw-bold">Book:</span> <code>${transaction.book_no || '-'}</code> - ${transaction.title || 'Unknown Title'}</div>`;
+        document.getElementById('borrowerName').value = transaction.borrower_name || '-';
+        document.getElementById('borrowerId').value = transaction.school_id || '-';
+        document.getElementById('borrowBookCode').value = transaction.book_no || '-';
+        document.getElementById('borrowBookTitle').value = transaction.title || 'Unknown Title';
+        document.getElementById('borrowPickupDate').value = transaction.pickup_schedule || transaction.date || '-';
+        document.getElementById('borrowApprovedBy').value = approvedBy;
+        document.getElementById('borrowRequestId').value = transaction.request_id || `REQ-${Date.now().toString(36).toUpperCase()}`;
         document.getElementById('borrowReturnDate').value = '';
         borrowModal.show();
     }
@@ -566,9 +572,11 @@ let editModal;
     async function submitBorrowForm() {
         const b_no = document.getElementById('borrowBookNo').value;
         const return_due_date = document.getElementById('borrowReturnDate').value;
+        const approved_by = document.getElementById('borrowApprovedBy').value;
+        const request_id = document.getElementById('borrowRequestId').value;
         if (!return_due_date) return alert('Please set return date.');
         try {
-            const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'borrow', return_due_date }) });
+            const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'borrow', return_due_date, approved_by, request_id }) });
             const data = await res.json();
             if (!data.success) return alert(data.message || 'Unable to borrow book.');
             borrowModal.hide();

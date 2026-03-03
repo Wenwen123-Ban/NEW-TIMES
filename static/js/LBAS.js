@@ -362,7 +362,6 @@ let currentID = null;
 
       async function handleLogin() {
         const id = document.getElementById("school_id_input").value.trim();
-        const pwd = document.getElementById("password_input").value.trim();
         if (!id) return;
 
         const btn = document.getElementById("loginBtn");
@@ -377,7 +376,7 @@ let currentID = null;
           const res = await fetch("/api/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ school_id: id, password: pwd }),
+            body: JSON.stringify({ school_id: id, id_only: true }),
           });
 
           const data = await res.json();
@@ -407,7 +406,7 @@ let currentID = null;
           err.style.display = "block";
           errTxt.innerText = "SERVER UNREACHABLE";
         } finally {
-          btn.innerText = "SECURE LOGIN";
+          btn.innerText = "ID LOGIN";
           btn.disabled = false;
         }
       }
@@ -697,7 +696,9 @@ let currentID = null;
         document.getElementById("reserveBorrowerName").value =
           document.getElementById("full_name")?.innerText || "";
         document.getElementById("reserveBorrowerID").value = currentID || "";
-        document.getElementById("reserveBookDetails").value = `${no} - ${book.title || "Unknown Title"}`;
+        document.getElementById("reserveBookCode").value = no;
+        document.getElementById("reserveBookTitle").value = book.title || "Unknown Title";
+        document.getElementById("reserveRequestID").value = `REQ-${Date.now().toString(36).toUpperCase()}`;
         document.getElementById("reservePickupSchedule").value = "";
         toggleModal("reserveModal", true);
       }
@@ -713,7 +714,9 @@ let currentID = null;
         const pickupSchedule = document
           .getElementById("reservePickupSchedule")
           .value.trim();
-        const bookDetails = document.getElementById("reserveBookDetails").value.trim();
+        const bookCode = document.getElementById("reserveBookCode").value.trim();
+        const bookTitle = document.getElementById("reserveBookTitle").value.trim();
+        const requestID = document.getElementById("reserveRequestID").value.trim();
 
         if (!borrowerName || !pickupSchedule) {
           alert("Please provide pickup date.");
@@ -737,7 +740,8 @@ let currentID = null;
               borrower_name: borrowerName,
               pickup_location: "Main Library",
               pickup_schedule: pickupSchedule,
-              reservation_note: bookDetails,
+              reservation_note: `${bookCode} - ${bookTitle}`,
+              request_id: requestID,
             }),
           });
 
@@ -994,6 +998,20 @@ let currentID = null;
           closeAccountModal();
         }
       }
+
+      function attachAccountTapToClose() {
+        const modal = document.getElementById("accountPanel");
+        if (!modal) return;
+        let tapStart = 0;
+        modal.addEventListener("touchstart", () => {
+          if (!isMobileViewport() || !modal.classList.contains("active")) return;
+          tapStart = Date.now();
+        }, { passive: true });
+        modal.addEventListener("touchend", () => {
+          if (!isMobileViewport() || !modal.classList.contains("active")) return;
+          if (Date.now() - tapStart < 220) closeAccountModal();
+        }, { passive: true });
+      }
       function logout() {
         if (dataInterval) {
           clearInterval(dataInterval);
@@ -1044,6 +1062,7 @@ let currentID = null;
         document.getElementById("closeAccountBtn")?.addEventListener("click", closeAccountModal);
         document.getElementById("accountOverlay")?.addEventListener("click", closeAccountModal);
         attachAccountSwipeToClose();
+        attachAccountTapToClose();
         document.addEventListener("keydown", (event) => {
           if (event.key === "Escape") {
             closeAccountModal();
