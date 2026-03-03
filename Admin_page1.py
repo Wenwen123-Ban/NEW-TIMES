@@ -823,6 +823,17 @@ def api_get_transactions():
     return jsonify(get_db("transactions"))
 
 
+@app.route("/api/admin_approval_record")
+def api_get_admin_approval_records():
+    if not require_auth():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+    records = get_db("admin_approval_record")
+    if not isinstance(records, list):
+        records = []
+    return jsonify(records)
+
+
 @app.route("/api/user/<s_id>")
 def api_get_specific_user(s_id):
     """Restored: Required for Tablet Kiosk to Scan User"""

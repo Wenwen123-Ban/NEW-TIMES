@@ -4,6 +4,7 @@ let currentRole = 'student',
         masterAdmins = [],
         masterTransactions = [],
         masterCategories = [],
+        masterApprovalRecords = [],
         adminHistory = JSON.parse(localStorage.getItem('adminHistory') || '[]'), 
         isStaff = false, 
         activeFilterCat = 'All',
@@ -67,6 +68,7 @@ let editModal;
     let transactionDetailModal;
     let borrowModal;
     let dashboardInitialized = false;
+    let loginActivityChart = null;
 
     function initializeDashboard() {
         if (dashboardInitialized) return;
@@ -114,26 +116,29 @@ let editModal;
     async function loadData(resetFilter = false) {
         try {
             const preservedFilterCat = activeFilterCat;
-            console.log('[ADMIN] fetch -> /api/books /api/users /api/admins /api/transactions /api/categories');
-            const [bRes, uRes, aRes, tRes, cRes] = await Promise.all([
+            console.log('[ADMIN] fetch -> /api/books /api/users /api/admins /api/transactions /api/categories /api/admin_approval_record');
+            const [bRes, uRes, aRes, tRes, cRes, approvalRes] = await Promise.all([
                 apiFetch('/api/books'),
                 apiFetch('/api/users'), 
                 apiFetch('/api/admins'),
                 apiFetch('/api/transactions'),
-                apiFetch('/api/categories', { method: 'GET' }, false)
+                apiFetch('/api/categories', { method: 'GET' }, false),
+                apiFetch('/api/admin_approval_record')
             ]);
-            console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status, categories: cRes.status });
+            console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status, categories: cRes.status, approvals: approvalRes.status });
 
             masterBooks = await bRes.json();
             const allUsers = await uRes.json();
             masterAdmins = await aRes.json();
             masterTransactions = await tRes.json();
             masterCategories = await cRes.json();
+            masterApprovalRecords = await approvalRes.json();
 
             if (!Array.isArray(masterBooks)) masterBooks = [];
             if (!Array.isArray(masterAdmins)) masterAdmins = [];
             if (!Array.isArray(masterTransactions)) masterTransactions = [];
             if (!Array.isArray(masterCategories)) masterCategories = [];
+            if (!Array.isArray(masterApprovalRecords)) masterApprovalRecords = [];
             const normalizedUsers = Array.isArray(allUsers) ? allUsers : [];
             
             masterUsers = normalizedUsers;
@@ -144,6 +149,9 @@ let editModal;
             filterInventory(); // Re-apply active category/search filters to fresh data
             syncMonitor();
             renderUsersList();
+            renderBorrowedBooksList();
+            renderBookRegistrationStats();
+            await loadLoginActivityGraph();
             await renderAdminHistory();
             
         } catch(e) { 
@@ -372,6 +380,118 @@ let editModal;
                 <td><span class="status-pill badge-${b.status.toLowerCase()}">${b.status}</span></td>
                 <td class="text-end pe-4">${isStaff ? `<button class="btn btn-sm btn-light border me-1 inventory-action" onclick="openEdit('book', '${b.book_no}', '${b.title}', '${b.category}')"><i class="fas fa-pen"></i></button> <button class="btn btn-sm btn-light border inventory-action" onclick="deleteRecord('book', '${b.book_no}')"><i class="fas fa-trash"></i></button>` : ''}</td>
             </tr>`).join('');
+    }
+
+    function renderBorrowedBooksList() {
+        const body = document.getElementById('borrowedBooksBody');
+        if (!body) return;
+
+        const borrowedRows = (Array.isArray(masterApprovalRecords) ? masterApprovalRecords : [])
+            .filter((row) => String(row.status || '').trim().toLowerCase() === 'borrowed')
+            .reverse();
+
+        body.innerHTML = borrowedRows.map((row, index) => {
+            const recordKey = row.request_id || `${row.book_no || 'book'}-${index}`;
+            return `<tr>
+                <td class="ps-4"><code class="fw-bold text-dark">${row.book_no || '-'}</code></td>
+                <td class="small fw-bold">${row.title || '-'}</td>
+                <td>${row.borrower_name || row.school_id || '-'}</td>
+                <td>${row.date || '-'}</td>
+                <td>${row.expiry || '-'}</td>
+                <td class="text-end pe-4">${isStaff ? `<button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="showApprovalBorrowInfo('${recordKey}')">Info</button>` : `<i class="fas fa-lock text-muted"></i>`}</td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="6" class="text-center py-4 text-muted">No borrowed approvals found.</td></tr>';
+    }
+
+    function showApprovalBorrowInfo(recordKey) {
+        const record = (masterApprovalRecords || []).find((row, index) => {
+            const rowKey = row.request_id || `${row.book_no || 'book'}-${index}`;
+            return rowKey === recordKey;
+        });
+        if (!record) return alert('Borrowed approval record not found.');
+
+        document.getElementById('transactionModalTitle').innerText = `Borrowed Approval • ${record.book_no || '-'}`;
+        document.getElementById('transactionModalBody').innerHTML = `
+            <div class="small">
+                <div><span class="fw-bold text-dark">Book:</span> ${record.title || '-'} (${record.book_no || '-'})</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Borrower:</span> ${record.borrower_name || '-'} (${record.school_id || '-'})</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Phone:</span> ${record.phone_number || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Pickup Date:</span> ${record.pickup_schedule || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Borrowed Date:</span> ${record.date || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Return Due:</span> ${record.expiry || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Request ID:</span> ${record.request_id || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Approved By:</span> ${record.approved_by || '-'}</div>
+            </div>`;
+        transactionDetailModal.show();
+    }
+
+    function renderBookRegistrationStats() {
+        const target = document.getElementById('bookRegistrationStats');
+        if (!target) return;
+        const total = masterBooks.length;
+        const borrowed = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'borrowed').length;
+        const reserved = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'reserved').length;
+        const available = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'available').length;
+        const categories = [...new Set(masterBooks.map((book) => String(book.category || '').trim()).filter(Boolean))].length;
+
+        target.innerHTML = `
+            <div class="row g-3">
+                <div class="col-6"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Total Books</div><div class="fw-bold fs-5">${total}</div></div></div>
+                <div class="col-6"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Categories</div><div class="fw-bold fs-5">${categories}</div></div></div>
+                <div class="col-4"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Available</div><div class="fw-bold">${available}</div></div></div>
+                <div class="col-4"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Reserved</div><div class="fw-bold">${reserved}</div></div></div>
+                <div class="col-4"><div class="p-3 bg-light rounded-3 border"><div class="text-muted small">Borrowed</div><div class="fw-bold">${borrowed}</div></div></div>
+            </div>`;
+    }
+
+    async function loadLoginActivityGraph() {
+        const canvas = document.getElementById('loginActivityChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+        try {
+            const res = await apiFetch('/api/monthly_activity_logs', { method: 'GET' }, false);
+            const data = await res.json();
+            const points = Array.isArray(data.days) ? data.days : [];
+            const labels = points.map((row) => row.day.slice(-2));
+            const loginSeries = points.map((row) => Number(row.login || 0));
+
+            const monthLabel = document.getElementById('loginGraphMonthLabel');
+            if (monthLabel) {
+                monthLabel.innerText = data.month || 'Current Month';
+            }
+
+            if (loginActivityChart) {
+                loginActivityChart.destroy();
+            }
+
+            loginActivityChart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Logins',
+                        data: loginSeries,
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.2)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error(error);
+        }
     }
 
     function openEdit(type, id, name, extra) {
