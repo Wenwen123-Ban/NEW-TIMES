@@ -467,9 +467,23 @@ let editModal;
         const target = document.getElementById('bookRegistrationStats');
         if (!target) return;
         const total = masterBooks.length;
-        const borrowed = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'borrowed').length;
-        const reserved = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'reserved').length;
-        const available = masterBooks.filter((book) => String(book.status || '').toLowerCase() === 'available').length;
+        const borrowedFromBooks = masterBooks.filter((book) => normalizeStatus(book.status) === 'borrowed').length;
+        const reservedFromBooks = masterBooks.filter((book) => normalizeStatus(book.status) === 'reserved').length;
+        const available = masterBooks.filter((book) => normalizeStatus(book.status) === 'available').length;
+        const reservedFromTransactions = new Set(
+            masterTransactions
+                .filter((tx) => normalizeStatus(tx.status) === 'reserved')
+                .map((tx) => String(tx.book_no || '').trim())
+                .filter(Boolean)
+        ).size;
+        const borrowedFromTransactions = new Set(
+            masterTransactions
+                .filter((tx) => normalizeStatus(tx.status) === 'borrowed')
+                .map((tx) => String(tx.book_no || '').trim())
+                .filter(Boolean)
+        ).size;
+        const reserved = Math.max(reservedFromBooks, reservedFromTransactions);
+        const borrowed = Math.max(borrowedFromBooks, borrowedFromTransactions);
         const categoryCounts = masterBooks.reduce((acc, book) => {
             const category = String(book.category || '').trim() || 'Uncategorized';
             acc[category] = (acc[category] || 0) + 1;
@@ -645,9 +659,14 @@ let editModal;
         return Number.isNaN(value) ? 0 : value;
     }
 
+    function normalizeStatus(value) {
+        return String(value || '').trim().toLowerCase();
+    }
+
     function getLatestTransactionForBook(bookNo, statuses = ['Reserved', 'Borrowed']) {
+        const normalizedStatuses = statuses.map((status) => normalizeStatus(status));
         return masterTransactions
-            .filter(t => t.book_no === bookNo && statuses.includes(t.status))
+            .filter((t) => t.book_no === bookNo && normalizedStatuses.includes(normalizeStatus(t.status)))
             .sort((a, b) => parseTxDate(b) - parseTxDate(a))[0] || null;
     }
 
@@ -731,8 +750,16 @@ let editModal;
     }
 
     async function syncMonitor() {
-        const active = masterTransactions.filter(t => t.status === 'Borrowed' || t.status === 'Reserved');
-        document.getElementById('monitorBody').innerHTML = active.map(t => `<tr><td class="ps-4"><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.title || 'Unknown Title'}</td><td>${t.borrower_name || '-'}</td><td class="small fw-bold">${t.school_id || '-'}</td><td>${t.status === 'Reserved' ? (t.pickup_schedule || t.date || '-') : (t.expiry || '-')}</td><td><span class="status-pill badge-${t.status.toLowerCase()}">${t.status}</span></td><td class="text-end pe-4">${isStaff ? `<div class="d-flex gap-1 justify-content-end"><button class="btn btn-sm btn-light border rounded-pill px-3" onclick="showTransactionInfo('${t.book_no}')">Info</button><button class="btn btn-sm btn-primary rounded-pill px-3" ${t.status !== 'Reserved' ? 'disabled' : ''} onclick="openBorrowForm('${t.book_no}')">Borrowed</button><button class="btn btn-sm btn-danger rounded-pill px-3" onclick="cancelReservation('${t.book_no}')">Release</button></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`).join('') || '<tr><td colspan="7" class="text-center py-4 text-muted">No active transactions.</td></tr>';
+        const active = masterTransactions.filter((t) => {
+            const status = normalizeStatus(t.status);
+            return status === 'borrowed' || status === 'reserved';
+        });
+        document.getElementById('monitorBody').innerHTML = active.map((t) => {
+            const status = normalizeStatus(t.status);
+            const statusLabel = status ? `${status.charAt(0).toUpperCase()}${status.slice(1)}` : 'Unknown';
+            const isReserved = status === 'reserved';
+            return `<tr><td class="ps-4"><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.title || 'Unknown Title'}</td><td>${t.borrower_name || '-'}</td><td class="small fw-bold">${t.school_id || '-'}</td><td>${isReserved ? (t.pickup_schedule || t.date || '-') : (t.expiry || '-')}</td><td><span class="status-pill badge-${status || 'unknown'}">${statusLabel}</span></td><td class="text-end pe-4">${isStaff ? `<div class="d-flex gap-1 justify-content-end"><button class="btn btn-sm btn-light border rounded-pill px-3" onclick="showTransactionInfo('${t.book_no}')">Info</button><button class="btn btn-sm btn-primary rounded-pill px-3" ${!isReserved ? 'disabled' : ''} onclick="openBorrowForm('${t.book_no}')">Borrowed</button><button class="btn btn-sm btn-danger rounded-pill px-3" onclick="cancelReservation('${t.book_no}')">Release</button></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`;
+        }).join('') || '<tr><td colspan="7" class="text-center py-4 text-muted">No active transactions.</td></tr>';
         updateTimers();
     }
 
@@ -842,13 +869,13 @@ let editModal;
     async function cancelReservation(b_no) {
         if(!confirm("Release reservation/borrowed record for " + b_no + "?")) return;
         try {
-            const tx = masterTransactions.find(t => t.book_no === b_no && t.status === 'Reserved');
+            const tx = masterTransactions.find((t) => t.book_no === b_no && normalizeStatus(t.status) === 'reserved');
             if (tx) {
                 const res = await apiFetch('/api/cancel_reservation', { method: 'POST', body: JSON.stringify({ book_no: b_no, school_id: tx.school_id }) });
                 if((await res.json()).success) { addHistory(`Released Reservation: ${b_no}`); loadData(); }
                 return;
             }
-            const borrowed = masterTransactions.find(t => t.book_no === b_no && t.status === 'Borrowed');
+            const borrowed = masterTransactions.find((t) => t.book_no === b_no && normalizeStatus(t.status) === 'borrowed');
             if (!borrowed) return alert('No active reservation/borrowed record found.');
             const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'return', school_id: borrowed.school_id }) });
             if((await res.json()).success) { addHistory(`Released Borrowed Book: ${b_no}`); loadData(); }
