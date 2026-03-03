@@ -14,6 +14,7 @@ let currentID = null;
       let userActiveLeases = {};
       let pendingReservationRequests = new Set();
       let pendingReserveBookNo = null;
+      let currentProfile = null;
       let latestBooksByCode = {};
       let allCollectionOrder = [];
       let categoryCollectionOrder = {};
@@ -549,6 +550,7 @@ let currentID = null;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("portalSection").style.display = "block";
 
+        currentProfile = profile;
         const isLibrarian = profile.category === "Staff";
 
         if (isLibrarian) {
@@ -691,16 +693,38 @@ let currentID = null;
         if (!schoolID) return;
         if (pendingReservationRequests.has(no)) return;
 
+
         const book = latestBooksByCode[no] || {};
         pendingReserveBookNo = no;
         document.getElementById("reserveBorrowerName").value =
           document.getElementById("full_name")?.innerText || "";
         document.getElementById("reserveBorrowerID").value = currentID || "";
+        document.getElementById("reservePhoneNumber").value = (currentProfile && currentProfile.phone_number) || "";
         document.getElementById("reserveBookCode").value = no;
         document.getElementById("reserveBookTitle").value = book.title || "Unknown Title";
         document.getElementById("reserveRequestID").value = `REQ-${Date.now().toString(36).toUpperCase()}`;
         document.getElementById("reservePickupSchedule").value = "";
+        document.getElementById("reservePickupSchedule").onchange = async (event) => {
+          const selected = event.target.value;
+          const status = await checkDateRestriction(selected);
+          if (status.restricted) {
+            alert(status.reason || "Selected date is restricted.");
+            event.target.value = "";
+          }
+        };
         toggleModal("reserveModal", true);
+      }
+
+      async function checkDateRestriction(dateValue) {
+        if (!dateValue) return { restricted: false };
+        try {
+          const res = await fetch(`/api/date_restrictions/check?date=${encodeURIComponent(dateValue)}`);
+          const data = await res.json();
+          if (!res.ok || !data.success) return { restricted: false };
+          return data;
+        } catch (error) {
+          return { restricted: false };
+        }
       }
 
       async function submitReserveForm() {
@@ -717,12 +741,19 @@ let currentID = null;
         const bookCode = document.getElementById("reserveBookCode").value.trim();
         const bookTitle = document.getElementById("reserveBookTitle").value.trim();
         const requestID = document.getElementById("reserveRequestID").value.trim();
+        const phoneNumber = document.getElementById("reservePhoneNumber").value.trim();
 
         if (!borrowerName || !pickupSchedule) {
           alert("Please provide pickup date.");
           return;
         }
         if (pendingReservationRequests.has(no)) return;
+
+        const dateStatus = await checkDateRestriction(pickupSchedule);
+        if (dateStatus.restricted) {
+          alert(dateStatus.reason || "Selected pickup date is restricted.");
+          return;
+        }
 
         pendingReservationRequests.add(no);
         if (reserveButton) reserveButton.disabled = true;
@@ -742,6 +773,7 @@ let currentID = null;
               pickup_schedule: pickupSchedule,
               reservation_note: `${bookCode} - ${bookTitle}`,
               request_id: requestID,
+              phone_number: phoneNumber,
             }),
           });
 
