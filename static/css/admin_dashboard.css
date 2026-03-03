@@ -265,6 +265,29 @@
         .dashboard-main table tr { border-bottom: 1px solid rgba(255,255,255,0.2); }
         .dashboard-main table tr:hover { background: rgba(255,255,255,0.08); }
 
+        .registration-stat-card {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 12px;
+            padding: 0.8rem 0.95rem;
+            height: 100%;
+        }
+
+        .registration-stat-label {
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.78);
+            margin-bottom: 0.2rem;
+        }
+
+        .registration-stat-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: #ffd54f;
+        }
+
         .dashboard-main .btn-primary {
             background: #ffd54f;
             color: #000;
