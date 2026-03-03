@@ -146,14 +146,14 @@ let editModal;
     async function loadData(resetFilter = false) {
         try {
             const preservedFilterCat = activeFilterCat;
-            console.log('[ADMIN] fetch -> /api/books /api/users /api/admins /api/transactions /api/categories /api/admin_approval_record');
+            console.log('[ADMIN] fetch -> /api/admin/books /api/admin/users /api/admin/admins /api/admin/transactions /api/categories /api/admin/approval-records');
             const [bRes, uRes, aRes, tRes, cRes, approvalRes] = await Promise.all([
-                apiFetch('/api/books'),
-                apiFetch('/api/users'), 
-                apiFetch('/api/admins'),
-                apiFetch('/api/transactions'),
+                apiFetch('/api/admin/books', { method: 'GET' }, false),
+                apiFetch('/api/admin/users', { method: 'GET' }, false), 
+                apiFetch('/api/admin/admins', { method: 'GET' }, false),
+                apiFetch('/api/admin/transactions', { method: 'GET' }, false),
                 apiFetch('/api/categories', { method: 'GET' }, false),
-                apiFetch('/api/admin_approval_record')
+                apiFetch('/api/admin/approval-records', { method: 'GET' }, false)
             ]);
             console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status, categories: cRes.status, approvals: approvalRes.status });
 
@@ -893,7 +893,7 @@ let editModal;
         const container = document.getElementById('adminActionLog');
         if (!container) return;
         try {
-            const res = await apiFetch('/api/transactions', { method: 'GET' });
+            const res = await apiFetch('/api/admin/transactions', { method: 'GET' }, false);
             const tx = await res.json();
             const recent = (Array.isArray(tx) ? tx : [])
                 .slice(-10)
