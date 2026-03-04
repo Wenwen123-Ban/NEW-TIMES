@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Extracted Registration Logic Pack</title>
+
+  <!--
+    This file is a transfer pack of registration-related logic.
+    Sections are labeled by:
+      - SOURCE FILE
+      - LANGUAGE (HTML / CSS / JS / Python)
+  -->
+
+  <style>
+    /* =========================================================
+       SOURCE: LBAS.html
+       LANGUAGE: CSS
+       PURPOSE: Registration photo upload UI
+       ========================================================= */
+    .upload-circle {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: #f1f5f9;
+      border: 2px dashed #cbd5e1;
+      margin: 0 auto 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .upload-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    .upload-icon {
+      font-size: 24px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <h1>Extracted Registration Code</h1>
+  <p>Use this file as a source when re-applying registration features in another branch.</p>
+
+  <!-- =========================================================
+       SOURCE: LBAS.html
+       LANGUAGE: HTML
+       PURPOSE: Student self-registration modal
+       ========================================================= -->
+  <section>
+    <h2>LBAS Student Registration Modal (HTML)</h2>
+    <div id="registerModal" class="modal-overlay">
+      <div class="custom-modal text-start">
+        <h4 class="fw-bold text-center mb-1">New Application</h4>
+        <p class="text-muted small text-center mb-4">Request access from the Librarian.</p>
+
+        <div class="upload-circle" onclick="document.getElementById('regPhoto').click()">
+          <i class="fas fa-camera upload-icon" id="uploadIcon"></i>
+          <img id="previewImg" />
+        </div>
+
+        <input
+          type="file"
+          id="regPhoto"
+          accept="image/*"
+          style="display: none"
+          onchange="previewPhoto(this)"
+        />
+
+        <div class="mb-3">
+          <label class="small fw-bold ms-2">Full Name</label>
+          <input type="text" id="regName" class="form-control" placeholder="e.g. Juan Dela Cruz" />
+        </div>
+
+        <div class="mb-3">
+          <label class="small fw-bold ms-2">School ID Number</label>
+          <input type="text" id="regID" class="form-control" placeholder="e.g. 2023-0015" />
+        </div>
+
+        <div class="mb-4">
+          <label class="small fw-bold ms-2">Create Password</label>
+          <input type="password" id="regPass" class="form-control" placeholder="••••••••" />
+        </div>
+
+        <button class="btn btn-primary" onclick="submitRegistration()">SUBMIT REQUEST</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       SOURCE: admin_dashboard.html
+       LANGUAGE: HTML
+       PURPOSE: Staff-controlled quick registration form
+       ========================================================= -->
+  <section>
+    <h2>Admin Quick Register Form (HTML)</h2>
+    <div id="enrollCard">
+      <h5>Quick Register</h5>
+      <div class="btn-group">
+        <button id="btnStudent" onclick="setRole('student')">Student</button>
+        <button id="btnAdmin" onclick="setRole('admin')">Staff</button>
+      </div>
+
+      <input type="text" id="regName" placeholder="Full Name" />
+      <input type="text" id="regID" placeholder="Unique ID Number" />
+      <input type="password" id="regPass" placeholder="Assign Password" />
+      <input type="file" id="regPhoto" />
+
+      <button onclick="submitUser()">CREATE DATABASE ENTRY</button>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       SOURCE: LBAS.html
+       LANGUAGE: JavaScript
+       PURPOSE: Client-side student registration submit + photo preview
+       ========================================================= -->
+  <script>
+    function previewPhoto(input) {
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          document.getElementById("previewImg").src = e.target.result;
+          document.getElementById("previewImg").style.display = "block";
+          document.getElementById("uploadIcon").style.display = "none";
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+
+    async function submitRegistration() {
+      const name = document.getElementById("regName").value;
+      const id = document.getElementById("regID").value;
+      const pwd = document.getElementById("regPass").value;
+      const file = document.getElementById("regPhoto").files[0];
+
+      if (!name || !id || !pwd) return alert("Please fill all fields.");
+
+      const fd = new FormData();
+      fd.append("name", name);
+      fd.append("school_id", id);
+      fd.append("password", pwd);
+      if (file) fd.append("photo", file);
+
+      try {
+        const res = await fetch("/api/register_student", { method: "POST", body: fd });
+        const data = await res.json();
+
+        if (data.success) {
+          alert("Application Sent!");
+        } else {
+          alert(data.message || "Registration Failed");
+        }
+      } catch (e) {
+        alert("Network Error during registration.");
+      }
+    }
+  </script>
+
+  <!-- =========================================================
+       SOURCE: admin_dashboard.html
+       LANGUAGE: JavaScript
+       PURPOSE: Admin/staff quick registration submit logic
+       ========================================================= -->
+  <script>
+    let isStaff = true;
+    let currentRole = "student";
+
+    function setRole(role) {
+      currentRole = role;
+      document.getElementById("btnStudent")?.classList.toggle("active", role === "student");
+      document.getElementById("btnAdmin")?.classList.toggle("active", role === "admin");
+    }
+
+    async function submitUser() {
+      if (!isStaff) return alert("System Locked");
+
+      const fd = new FormData();
+      fd.append("name", document.getElementById("regName").value);
+      fd.append("school_id", document.getElementById("regID").value);
+      fd.append("password", document.getElementById("regPass").value);
+
+      const photo = document.getElementById("regPhoto").files[0];
+      if (photo) fd.append("photo", photo);
+
+      const endpoint = currentRole === "admin" ? "/api/register_librarian" : "/api/register_student";
+      const res = await fetch(endpoint, { method: "POST", body: fd });
+      const data = await res.json();
+
+      if (data.success) {
+        alert("User Added");
+      }
+    }
+  </script>
+
+  <!-- =========================================================
+       SOURCE: Admin_page1.py
+       LANGUAGE: Python
+       PURPOSE: Backend registration endpoints and shared registration function
+       NOTE: Kept as text block for transfer/reference.
+       ========================================================= -->
+  <section>
+    <h2>Backend Registration Logic (Python from Admin_page1.py)</h2>
+    <pre><code>
+@app.route("/api/register_student", methods=["POST"])
+def api_reg_student():
+    try:
+        name = request.form.get("name")
+        school_id = request.form.get("school_id")
+        password = request.form.get("password")
+        photo = request.files.get("photo")
+
+        s_id = str(school_id or "").strip().lower()
+        if not name or not s_id or not password:
+            return jsonify({"success": False, "message": "Missing required fields"}), 400
+
+        if find_any_user(s_id):
+            return jsonify({"success": False, "message": "ID Exists"}), 400
+
+        saved_photo = "default.png"
+        if photo and photo.filename:
+            _, ext = os.path.splitext(photo.filename)
+            ext = ext.lower()[:10] if ext else ".png"
+            filename = secure_filename(f"{s_id}_{int(datetime.now().timestamp())}{ext}")
+            if filename:
+                photo.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+                saved_photo = filename
+
+        users = get_db("users")
+        users.append(
+            {
+                "name": name,
+                "school_id": s_id,
+                "password": password,
+                "category": "Student",
+                "photo": saved_photo,
+                "status": "pending",
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            }
+        )
+        save_db("users", users)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+@app.route("/api/register_librarian", methods=["POST"])
+def api_reg_staff():
+    return perform_registration("admins", "Staff")
+
+
+def perform_registration(target_db_key, category_name):
+    if request.is_json:
+        data = request.json
+        name = data.get("name")
+        s_id = str(data.get("school_id")).strip().lower()
+        pwd = data.get("password")
+    else:
+        name = request.form.get("name")
+        s_id = str(request.form.get("school_id")).strip().lower()
+        pwd = request.form.get("password")
+
+    if find_any_user(s_id):
+        return jsonify({"success": False, "message": "ID Exists"}), 400
+
+    photo = "default.png"
+    if "photo" in request.files:
+        f = request.files["photo"]
+        if f.filename != "":
+            ext = f.filename.split(".")[-1]
+            photo = secure_filename(f"{s_id}_{int(datetime.now().timestamp())}.{ext}")
+            f.save(os.path.join(app.config["UPLOAD_FOLDER"], photo))
+
+    status = "approved" if category_name == "Staff" else "pending"
+
+    registry = get_db(target_db_key)
+    registry.append(
+        {
+            "name": name,
+            "school_id": s_id,
+            "password": pwd,
+            "category": category_name,
+            "photo": photo,
+            "status": status,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        }
+    )
+    save_db(target_db_key, registry)
+    return jsonify({"success": True})
+    </code></pre>
+  </section>
+</body>
+</html>
