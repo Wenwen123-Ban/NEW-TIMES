@@ -901,7 +901,7 @@ let editModal;
             const status = normalizeStatus(t.status);
             const statusLabel = status ? `${status.charAt(0).toUpperCase()}${status.slice(1)}` : 'Unknown';
             const isReserved = status === 'reserved';
-            return `<tr><td class="ps-4"><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.title || 'Unknown Title'}</td><td>${t.borrower_name || '-'}</td><td class="small fw-bold">${t.school_id || '-'}</td><td>${isReserved ? (t.pickup_schedule || t.date || '-') : (t.expiry || '-')}</td><td><span class="status-pill badge-${status || 'unknown'}">${statusLabel}</span></td><td class="text-end pe-4">${isStaff ? `<div class="d-flex gap-1 justify-content-end"><button class="btn btn-sm btn-light border rounded-pill px-3" onclick="showTransactionInfo('${t.book_no}')">Info</button><button class="btn btn-sm btn-primary rounded-pill px-3" ${!isReserved ? 'disabled' : ''} onclick="openBorrowForm('${t.book_no}')">Borrowed</button><button class="btn btn-sm btn-danger rounded-pill px-3" onclick="cancelReservation('${t.book_no}')">Release</button></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`;
+            return `<tr><td class="ps-4"><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.title || 'Unknown Title'}</td><td>${t.borrower_name || '-'}</td><td class="small fw-bold">${t.school_id || '-'}</td><td>${isReserved ? (t.pickup_schedule || t.date || '-') : (t.expiry || '-')}</td><td><span class="status-pill badge-${status || 'unknown'}">${statusLabel}</span></td><td class="text-end pe-4">${isStaff ? `<div class="d-flex gap-1 justify-content-end"><button class="btn btn-sm btn-light border rounded-pill px-3" onclick="showTransactionInfo('${t.book_no}')">Info</button><button class="btn btn-sm btn-primary rounded-pill px-3" ${!isReserved ? 'disabled' : ''} onclick="openBorrowForm('${t.book_no}')">Borrowed</button><button class="btn btn-sm btn-danger rounded-pill px-3" onclick="cancelReservation('${t.book_no}', '${t.school_id || ''}', '${t.request_id || ''}', '${status}')">Release</button></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`;
         }).join('') || '<tr><td colspan="7" class="text-center py-4 text-muted">No active transactions.</td></tr>';
         updateTimers();
     }
@@ -1009,18 +1009,21 @@ let editModal;
         }
     }
 
-    async function cancelReservation(b_no) {
+    async function cancelReservation(b_no, school_id = '', request_id = '', status = '') {
         if(!confirm("Release reservation/borrowed record for " + b_no + "?")) return;
         try {
+            const normalizedStatus = normalizeStatus(status);
             const tx = masterTransactions.find((t) => t.book_no === b_no && normalizeStatus(t.status) === 'reserved');
-            if (tx) {
-                const res = await apiFetch('/api/cancel_reservation', { method: 'POST', body: JSON.stringify({ book_no: b_no, school_id: tx.school_id }) });
+            if (normalizedStatus === 'reserved' || (!normalizedStatus && tx)) {
+                const reservedOwner = school_id || (tx ? tx.school_id : '');
+                const reservedRequestId = request_id || (tx ? (tx.request_id || '') : '');
+                const res = await apiFetch('/api/cancel_reservation', { method: 'POST', body: JSON.stringify({ book_no: b_no, school_id: reservedOwner, request_id: reservedRequestId }) });
                 if((await res.json()).success) { addHistory(`Released Reservation: ${b_no}`); loadData(); }
                 return;
             }
-            const borrowed = masterTransactions.find((t) => t.book_no === b_no && normalizeStatus(t.status) === 'borrowed');
+            const borrowed = masterTransactions.find((t) => t.book_no === b_no && normalizeStatus(t.status) === 'borrowed' && ((request_id && (t.request_id || '') === request_id) || (school_id && t.school_id === school_id) || (!request_id && !school_id)));
             if (!borrowed) return alert('No active reservation/borrowed record found.');
-            const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'return', school_id: borrowed.school_id }) });
+            const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'return', school_id: borrowed.school_id, request_id: borrowed.request_id || request_id || '' }) });
             if((await res.json()).success) { addHistory(`Released Borrowed Book: ${b_no}`); loadData(); }
         } catch (error) {
             console.error(error);

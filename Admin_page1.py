@@ -1210,19 +1210,26 @@ def api_cancel_reservation():
     data = request.json or {}
     b_no = data.get("book_no")
     s_id = str(data.get("school_id", "")).strip().lower()
+    request_id = str(data.get("request_id", "")).strip()
     books = get_db("books")
     transactions = get_db("transactions")
 
     changed = False
     for t in transactions:
+        tx_request_id = str(t.get("request_id", "")).strip()
+        id_match = bool(request_id and tx_request_id and tx_request_id == request_id)
+        school_match = (
+            not request_id and str(t.get("school_id", "")).strip().lower() == s_id
+        )
         if (
             t.get("book_no") == b_no
-            and str(t.get("school_id", "")).strip().lower() == s_id
+            and (id_match or school_match)
             and t.get("status") in ["Reserved", "Unavailable"]
         ):
             t["status"] = "Cancelled"
             t["cancelled_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
             changed = True
+            break
 
     if not changed:
         return jsonify({"success": False, "message": "Active reservation not found"}), 404
@@ -1254,14 +1261,75 @@ def api_process_trans():
 
     # LOGIC 1: RETURN
     if action == "return":
+        target_request_id = str(data.get("request_id", "")).strip()
+        target_school_id = str(data.get("school_id", "")).strip().lower()
+        matched_transaction = False
+
         for b in books:
             if b["book_no"] == b_no:
                 b["status"] = "Available"
-        # Close all open transactions for this book
+        # Close matching open transaction(s) for this book
         for t in transactions:
-            if t["book_no"] == b_no and t["status"] in ["Reserved", "Borrowed"]:
-                t["status"] = "Returned"
-                t["return_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            if t["book_no"] != b_no or t["status"] not in ["Reserved", "Borrowed"]:
+                continue
+
+            tx_request_id = str(t.get("request_id", "")).strip()
+            tx_school_id = str(t.get("school_id", "")).strip().lower()
+            request_id_match = bool(
+                target_request_id and tx_request_id and tx_request_id == target_request_id
+            )
+            school_id_match = bool(
+                not target_request_id and target_school_id and tx_school_id == target_school_id
+            )
+
+            if target_request_id and not request_id_match:
+                continue
+            if not target_request_id and target_school_id and not school_id_match:
+                continue
+
+            if t["status"] == "Borrowed":
+                matched_transaction = True
+
+            t["status"] = "Returned"
+            t["return_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        # Keep admin approval log in sync so released books no longer appear as Borrowed.
+        approval_log = get_db("admin_approval_record")
+        if not isinstance(approval_log, list):
+            approval_log = []
+        approval_changed = False
+        for row in approval_log:
+            if row.get("book_no") != b_no or row.get("status") != "Borrowed":
+                continue
+
+            row_request_id = str(row.get("request_id", "")).strip()
+            row_school_id = str(row.get("school_id", "")).strip().lower()
+            request_id_match = bool(
+                target_request_id and row_request_id and row_request_id == target_request_id
+            )
+            school_id_match = bool(
+                not target_request_id
+                and target_school_id
+                and row_school_id == target_school_id
+            )
+
+            if target_request_id and not request_id_match:
+                continue
+            if not target_request_id and target_school_id and not school_id_match:
+                continue
+
+            row["status"] = "Returned"
+            row["return_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            approval_changed = True
+
+        if approval_changed:
+            save_db("admin_approval_record", approval_log)
+
+        if target_request_id and not matched_transaction:
+            return (
+                jsonify({"success": False, "message": "Matching borrowed record not found"}),
+                404,
+            )
 
     # LOGIC 2: BORROW (Restored for Tablet)
     elif action == "borrow":
@@ -1444,6 +1512,7 @@ def api_reserve():
 
     for b in books:
         if b["book_no"] == b_no and b["status"] != "Borrowed":
+            b["status"] = "Reserved"
             reservation_payload = {
                     "book_no": b_no,
                     "title": b.get("title", ""),
