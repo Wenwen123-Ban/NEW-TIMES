@@ -705,7 +705,7 @@ let currentID = null;
                     <span class="text-muted" style="font-size: 10px; font-weight:700;">${categoryLabel}</span>
                     <div class="fw-bold text-dark mt-1">${title}</div>
                     <code class="small text-primary fw-bold">${bookNo}</code>
-                    ${!isBorrowed ? `<button class="btn-action shadow-sm reserve-book-btn" data-book-no="${bookNo}">RESERVE BOOK</button>` : ""}
+                    ${!isBorrowed ? `<button class="btn-action shadow-sm reserve-book-btn" data-book-no="${bookNo}" onclick="reserveBook('${bookNo}')">RESERVE BOOK</button>` : ""}
                 </div>`;
                 },
               )
@@ -720,7 +720,7 @@ let currentID = null;
 
       function reserveBook(no) {
         const schoolID = String(currentID || "").trim();
-        if (!schoolID || !currentToken) {
+        if (!schoolID) {
           alert("Session expired. Please login again.");
           return;
         }
@@ -1223,6 +1223,7 @@ let currentID = null;
         document.getElementById("bookContainer")?.addEventListener("click", (event) => {
           const button = event.target.closest(".reserve-book-btn");
           if (!button) return;
+          if (button.getAttribute("onclick")) return;
           reserveBook(String(button.dataset.bookNo || "").trim());
         });
 
