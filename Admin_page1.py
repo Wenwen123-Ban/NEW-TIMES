@@ -1214,25 +1214,54 @@ def api_cancel_reservation():
     books = get_db("books")
     transactions = get_db("transactions")
 
-    changed = False
-    for t in transactions:
-        tx_request_id = str(t.get("request_id", "")).strip()
-        id_match = bool(request_id and tx_request_id and tx_request_id == request_id)
-        school_match = (
-            not request_id and str(t.get("school_id", "")).strip().lower() == s_id
-        )
-        if (
-            t.get("book_no") == b_no
-            and (id_match or school_match)
-            and t.get("status") in ["Reserved", "Unavailable"]
-        ):
-            t["status"] = "Cancelled"
-            t["cancelled_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-            changed = True
-            break
+    def _cancel_status_allowed(tx):
+        return str(tx.get("status", "")).strip().lower() in {"reserved", "unavailable"}
 
-    if not changed:
+    def _parse_tx_date(tx):
+        raw = str(tx.get("date") or tx.get("reserved_at") or "").strip()
+        if not raw:
+            return datetime.min
+        for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(raw, fmt)
+            except ValueError:
+                continue
+        return datetime.min
+
+    candidates = [
+        t
+        for t in transactions
+        if t.get("book_no") == b_no and _cancel_status_allowed(t)
+    ]
+
+    target_transaction = None
+    if request_id:
+        target_transaction = next(
+            (
+                t
+                for t in candidates
+                if str(t.get("request_id", "")).strip() == request_id
+            ),
+            None,
+        )
+    if target_transaction is None and s_id:
+        target_transaction = next(
+            (
+                t
+                for t in candidates
+                if str(t.get("school_id", "")).strip().lower() == s_id
+            ),
+            None,
+        )
+    if target_transaction is None and candidates:
+        candidates.sort(key=_parse_tx_date, reverse=True)
+        target_transaction = candidates[0]
+
+    if target_transaction is None:
         return jsonify({"success": False, "message": "Active reservation not found"}), 404
+
+    target_transaction["status"] = "Cancelled"
+    target_transaction["cancelled_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for b in books:
         if b.get("book_no") == b_no and b.get("status") == "Reserved":
