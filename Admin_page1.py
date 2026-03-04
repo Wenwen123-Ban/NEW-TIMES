@@ -548,8 +548,11 @@ def run_auto_sync_engine():
 
 @app.route("/")
 def index_gateway():
-    if is_mobile_request():
-        return redirect(url_for("lbas_site"))
+    return render_template("Library_web_landing_page.html")
+
+
+@app.route("/admin")
+def admin_site():
     # Pre-load data for dashboard
     return render_template(
         "admin_dashboard.html",
@@ -571,7 +574,7 @@ def tablet_kiosk():
 
 @app.route("/audit_users")
 def audit_view():
-    return redirect(url_for("index_gateway"))
+    return redirect(url_for("admin_site"))
 
 
 

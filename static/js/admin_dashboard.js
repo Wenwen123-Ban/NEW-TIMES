@@ -1073,7 +1073,7 @@ let editModal;
         localStorage.removeItem('isStaffAuth');
         localStorage.removeItem('adminToken');
         localStorage.removeItem('token');
-        window.location.reload();
+        window.location.href = "/";
     }
 
     function updateTimers() {

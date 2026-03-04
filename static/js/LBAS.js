@@ -1124,6 +1124,7 @@ let currentID = null;
         closeAccountModal();
         toggleModal("reserveModal", false);
         document.getElementById("bookContainer").innerHTML = "";
+        window.location.href = "/";
       }
 
       function initializeLBAS() {
