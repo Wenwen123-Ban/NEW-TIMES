@@ -2,6 +2,7 @@
             --admin-dark: #0f172a; 
             --accent: #38bdf8; 
             --sidebar-w: 270px; 
+            --admin-header-height: 112px;
             --lock-overlay: rgba(241, 245, 249, 0.96);
             --card-shadow: 0 10px 30px rgba(0,0,0,0.08);
             --danger: #ef4444;
@@ -24,15 +25,19 @@
             overflow-x: hidden;
             color: #334155;
             min-height: 100%;
+            margin: 0;
         }
         .dashboard-layout {
             display: flex;
             flex: 1;
             align-items: stretch;
             position: relative;
+            min-height: calc(100vh - var(--admin-header-height));
+            max-height: calc(100vh - var(--admin-header-height));
+            overflow: hidden;
         }
         /* Navigation & Sidebar */
-        .sidebar { background: var(--admin-dark); color: white; position: relative; z-index: 100; width: var(--sidebar-w); padding: 25px; transition: 0.3s; display: flex; flex-direction: column; border-right: 1px solid #1e293b; }
+        .sidebar { background: var(--admin-dark); color: white; position: sticky; top: 0; z-index: 100; width: var(--sidebar-w); padding: 25px; transition: 0.3s; display: flex; flex-direction: column; border-right: 1px solid #1e293b; max-height: calc(100vh - var(--admin-header-height)); }
 
         header {
             position: relative;
@@ -49,7 +54,9 @@
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            overflow: visible;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
         }
 
         .main-content::before,
@@ -567,16 +574,22 @@
         @media (max-width: 992px) {
             .main-wrapper.dashboard-layout {
                 flex-direction: column;
+                min-height: auto;
+                max-height: none;
+                overflow: visible;
             }
 
             .sidebar {
                 width: 100%;
                 padding: 16px;
+                position: relative;
+                max-height: none;
             }
 
             .main-content,
             .dashboard-main {
                 padding: 16px;
+                overflow: visible;
             }
 
             .table-responsive,
