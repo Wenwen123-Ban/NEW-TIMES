@@ -1018,15 +1018,29 @@ let editModal;
                 const reservedOwner = school_id || (tx ? tx.school_id : '');
                 const reservedRequestId = request_id || (tx ? (tx.request_id || '') : '');
                 const res = await apiFetch('/api/cancel_reservation', { method: 'POST', body: JSON.stringify({ book_no: b_no, school_id: reservedOwner, request_id: reservedRequestId }) });
-                if((await res.json()).success) { addHistory(`Released Reservation: ${b_no}`); loadData(); }
+                const data = await res.json();
+                if(data.success) { addHistory(`Released Reservation: ${b_no}`); loadData(); return; }
+                alert(data.message || 'Unable to release reservation.');
                 return;
             }
-            const borrowed = masterTransactions.find((t) => t.book_no === b_no && normalizeStatus(t.status) === 'borrowed' && ((request_id && (t.request_id || '') === request_id) || (school_id && t.school_id === school_id) || (!request_id && !school_id)));
+            const normalizedSchool = String(school_id || '').trim().toLowerCase();
+            const normalizedRequest = String(request_id || '').trim();
+            const borrowed = masterTransactions.find((t) => {
+                if (t.book_no !== b_no || normalizeStatus(t.status) !== 'borrowed') return false;
+                const txSchool = String(t.school_id || '').trim().toLowerCase();
+                const txRequest = String(t.request_id || '').trim();
+                return (normalizedRequest && txRequest === normalizedRequest)
+                    || (!normalizedRequest && normalizedSchool && txSchool === normalizedSchool)
+                    || (!normalizedRequest && !normalizedSchool);
+            });
             if (!borrowed) return alert('No active reservation/borrowed record found.');
             const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'return', school_id: borrowed.school_id, request_id: borrowed.request_id || request_id || '' }) });
-            if((await res.json()).success) { addHistory(`Released Borrowed Book: ${b_no}`); loadData(); }
+            const data = await res.json();
+            if(data.success) { addHistory(`Released Borrowed Book: ${b_no}`); loadData(); return; }
+            alert(data.message || 'Unable to release borrowed record.');
         } catch (error) {
             console.error(error);
+            alert('Unable to release reservation/borrowed record right now.');
         }
     }
 
