@@ -240,6 +240,19 @@ def initialize_system():
         if registry_changed:
             save_db(reg_key, members)
 
+    # MIGRATION: Ensure every book has a non-empty status for LBAS rendering/actions.
+    books = get_db("books")
+    books_changed = False
+    for book in books:
+        if not isinstance(book, dict):
+            continue
+        status = str(book.get("status", "")).strip()
+        if not status:
+            book["status"] = "Available"
+            books_changed = True
+    if books_changed:
+        save_db("books", books)
+
     # Ensure Root Admin exists
     admins = get_db("admins")
     if not admins:
@@ -521,16 +534,22 @@ def run_auto_sync_engine():
 
     # 1. Sync Reservations (legacy expiry support only)
     for t in transactions:
-        if t["status"] == "Reserved" and "expiry" in t and t.get("expiry"):
-            try:
-                if now > datetime.strptime(t["expiry"], "%Y-%m-%d %H:%M"):
-                    t["status"] = "Expired"
-                    for b in books:
-                        if b["book_no"] == t["book_no"]:
-                            b["status"] = "Available"
-                            changes_made = True
-            except:
-                pass
+        if not isinstance(t, dict):
+            continue
+        if str(t.get("status", "")).strip() != "Reserved":
+            continue
+        expiry_value = str(t.get("expiry", "")).strip()
+        if not expiry_value:
+            continue
+        try:
+            if now > datetime.strptime(expiry_value, "%Y-%m-%d %H:%M"):
+                t["status"] = "Expired"
+                for b in books:
+                    if isinstance(b, dict) and b.get("book_no") == t.get("book_no"):
+                        b["status"] = "Available"
+                        changes_made = True
+        except ValueError:
+            continue
 
     # 2. Sync Recovery Tickets (Cleanup expired)
     initial_tickets = len(tickets)
@@ -1000,7 +1019,25 @@ def api_admin_get_approval_records():
 def api_get_books():
     if not require_auth():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
-    return jsonify(run_auto_sync_engine())
+
+    books = run_auto_sync_engine()
+    if not isinstance(books, list):
+        books = []
+
+    normalized_books = []
+    changed = False
+    for book in books:
+        if not isinstance(book, dict):
+            continue
+        status = str(book.get("status", "")).strip() or "Available"
+        if status != book.get("status"):
+            book["status"] = status
+            changed = True
+        normalized_books.append(book)
+
+    if changed:
+        save_db("books", books)
+    return jsonify(normalized_books)
 
 
 @app.route("/api/categories")

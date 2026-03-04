@@ -23,6 +23,10 @@ let currentID = null;
       let accountSwipeCloseTriggered = false;
       const ACCOUNT_SWIPE_CLOSE_THRESHOLD = 80;
 
+      function normalizeBookStatus(statusValue) {
+        return String(statusValue || "Available").trim() || "Available";
+      }
+
       function isMobileViewport() {
         return window.matchMedia("(max-width: 768px)").matches;
       }
@@ -629,9 +633,11 @@ let currentID = null;
           const isSearching = search.length > 0;
 
           const filtered = books.filter((b) => {
+            const title = String(b?.title || "").toLowerCase();
+            const bookNo = String(b?.book_no || "").toLowerCase();
             const matchesSearch =
-              b.title.toLowerCase().includes(search) ||
-              b.book_no.toLowerCase().includes(search);
+              title.includes(search) ||
+              bookNo.includes(search);
             const matchesCategory =
               isSearching ||
               selectedCategory === "All" ||
@@ -671,23 +677,25 @@ let currentID = null;
           document.getElementById("bookContainer").innerHTML =
             displayBooks
               .map(
-                (b) => `
+                (b) => {
+                  const normalizedStatus = normalizeBookStatus(b?.status);
+                  const normalizedStatusKey = normalizedStatus.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+                  const categoryLabel = String(b?.category || "General").toUpperCase();
+                  const title = String(b?.title || "Untitled");
+                  const bookNo = String(b?.book_no || "N/A");
+                  const isBorrowed = normalizedStatus.toLowerCase() === "borrowed";
+                  return `
                 <div class="book-item shadow-sm">
-                    <span class="status-tag tag-${b.status.toLowerCase()}">${b.status}</span>
-                    <span class="text-muted" style="font-size: 10px; font-weight:700;">${b.category.toUpperCase()}</span>
-                    <div class="fw-bold text-dark mt-1">${b.title}</div>
-                    <code class="small text-primary fw-bold">${b.book_no}</code>
-                    ${b.status !== "Borrowed" ? `<button class="btn-action shadow-sm reserve-book-btn" data-book-no="${b.book_no}">RESERVE BOOK</button>` : ""}
-                </div>`,
+                    <span class="status-tag tag-${normalizedStatusKey}">${normalizedStatus}</span>
+                    <span class="text-muted" style="font-size: 10px; font-weight:700;">${categoryLabel}</span>
+                    <div class="fw-bold text-dark mt-1">${title}</div>
+                    <code class="small text-primary fw-bold">${bookNo}</code>
+                    ${!isBorrowed ? `<button class="btn-action shadow-sm reserve-book-btn" data-book-no="${bookNo}">RESERVE BOOK</button>` : ""}
+                </div>`;
+                },
               )
               .join("") ||
             '<div class="text-center text-muted mt-5"><i class="fas fa-book-open fa-2x mb-3 opacity-25"></i><br>No books found.</div>';
-
-          document.querySelectorAll(".reserve-book-btn").forEach((button) => {
-            button.addEventListener("click", () => {
-              reserveBook(button.dataset.bookNo || "");
-            });
-          });
 
           renderActiveLeases();
         } catch (e) {
@@ -696,18 +704,27 @@ let currentID = null;
       }
 
       function reserveBook(no) {
-        const schoolID = String(currentID);
-        if (!schoolID) return;
+        const schoolID = String(currentID || "").trim();
+        if (!schoolID || !currentToken) {
+          alert("Session expired. Please login again.");
+          return;
+        }
+        if (!no) return;
         if (pendingReservationRequests.has(no)) return;
 
 
         const book = latestBooksByCode[no] || {};
         pendingReserveBookNo = no;
-        document.getElementById("reserveBorrowerName").value =
-          document.getElementById("full_name")?.innerText || "";
-        document.getElementById("reserveBorrowerID").value = currentID || "";
         const reserveContactType = document.getElementById("reserveContactType");
         const reserveContactInput = document.getElementById("reservePhoneNumber");
+        const reserveBorrowerName = document.getElementById("reserveBorrowerName");
+        const reserveBorrowerID = document.getElementById("reserveBorrowerID");
+        if (!reserveContactType || !reserveContactInput || !reserveBorrowerName || !reserveBorrowerID) {
+          console.error("Reserve modal fields are missing.");
+          return;
+        }
+        reserveBorrowerName.value = document.getElementById("full_name")?.innerText || "";
+        reserveBorrowerID.value = currentID || "";
         reserveContactType.value = "phone";
         reserveContactInput.value = (currentProfile && currentProfile.phone_number) || "";
         reserveContactInput.placeholder = "09XXXXXXXXX";
@@ -1184,6 +1201,11 @@ let currentID = null;
         );
 
         bindReserveCredentialType();
+        document.getElementById("bookContainer")?.addEventListener("click", (event) => {
+          const button = event.target.closest(".reserve-book-btn");
+          if (!button) return;
+          reserveBook(String(button.dataset.bookNo || "").trim());
+        });
 
         document.addEventListener("click", (e) => {
           const categoryButton = e.target.closest(".category-btn");
