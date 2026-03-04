@@ -734,13 +734,15 @@ let currentID = null;
         const reserveContactInput = document.getElementById("reservePhoneNumber");
         const reserveBorrowerName = document.getElementById("reserveBorrowerName");
         const reserveBorrowerID = document.getElementById("reserveBorrowerID");
-        if (!reserveContactType || !reserveContactInput || !reserveBorrowerName || !reserveBorrowerID) {
+        if (!reserveContactInput || !reserveBorrowerName || !reserveBorrowerID) {
           console.error("Reserve modal fields are missing.");
           return;
         }
         reserveBorrowerName.value = document.getElementById("full_name")?.innerText || "";
         reserveBorrowerID.value = currentID || "";
-        reserveContactType.value = "phone";
+        if (reserveContactType) {
+          reserveContactType.value = "phone";
+        }
         reserveContactInput.value = (currentProfile && currentProfile.phone_number) || "";
         reserveContactInput.placeholder = "09XXXXXXXXX";
         document.getElementById("reserveBookCode").value = no;
@@ -777,7 +779,12 @@ let currentID = null;
       function bindReserveCredentialType() {
         const contactType = document.getElementById("reserveContactType");
         const contactInput = document.getElementById("reservePhoneNumber");
-        if (!contactType || !contactInput || contactType.dataset.bound === "true") return;
+        if (!contactInput) return;
+        if (!contactType) {
+          contactInput.placeholder = "09XXXXXXXXX";
+          return;
+        }
+        if (contactType.dataset.bound === "true") return;
         contactType.addEventListener("change", () => {
           const selectedType = contactType.value;
           contactInput.value = "";
@@ -806,7 +813,7 @@ let currentID = null;
         const bookCode = document.getElementById("reserveBookCode").value.trim();
         const bookTitle = document.getElementById("reserveBookTitle").value.trim();
         const requestID = document.getElementById("reserveRequestID").value.trim();
-        const contactType = document.getElementById("reserveContactType").value.trim();
+        const contactType = (document.getElementById("reserveContactType")?.value || "phone").trim();
         const contactValue = document.getElementById("reservePhoneNumber").value.trim();
 
         if (!borrowerName || !pickupSchedule) {
