@@ -564,9 +564,7 @@ let editModal;
         const body = document.getElementById('borrowedBooksBody');
         if (!body) return;
 
-        const borrowedRows = (Array.isArray(masterApprovalRecords) ? masterApprovalRecords : [])
-            .filter((row) => String(row.status || '').trim().toLowerCase() === 'borrowed')
-            .reverse();
+        const borrowedRows = getSyncedBorrowedApprovalRows();
 
         body.innerHTML = borrowedRows.map((row, index) => {
             const recordKey = row.request_id || `${row.book_no || 'book'}-${index}`;
@@ -581,8 +579,32 @@ let editModal;
         }).join('') || '<tr><td colspan="6" class="text-center py-4 text-muted">No borrowed approvals found.</td></tr>';
     }
 
+    function getSyncedBorrowedApprovalRows() {
+        const borrowedTransactionKeys = new Set(
+            (Array.isArray(masterTransactions) ? masterTransactions : [])
+                .filter((tx) => normalizeStatus(tx.status) === 'borrowed')
+                .map((tx) => [
+                    String(tx.request_id || '').trim(),
+                    String(tx.book_no || '').trim(),
+                    String(tx.school_id || '').trim().toLowerCase()
+                ].join('|'))
+        );
+
+        return (Array.isArray(masterApprovalRecords) ? masterApprovalRecords : [])
+            .filter((row) => {
+                if (normalizeStatus(row.status) !== 'borrowed') return false;
+                const rowKey = [
+                    String(row.request_id || '').trim(),
+                    String(row.book_no || '').trim(),
+                    String(row.school_id || '').trim().toLowerCase()
+                ].join('|');
+                return borrowedTransactionKeys.has(rowKey);
+            })
+            .reverse();
+    }
+
     function showApprovalBorrowInfo(recordKey) {
-        const record = (masterApprovalRecords || []).find((row, index) => {
+        const record = getSyncedBorrowedApprovalRows().find((row, index) => {
             const rowKey = row.request_id || `${row.book_no || 'book'}-${index}`;
             return rowKey === recordKey;
         });

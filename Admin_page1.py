@@ -1293,13 +1293,14 @@ def api_process_trans():
         target_request_id = str(data.get("request_id", "")).strip()
         target_school_id = str(data.get("school_id", "")).strip().lower()
         matched_transaction = False
+        normalize = lambda value: str(value or "").strip().lower()
 
         for b in books:
             if b["book_no"] == b_no:
                 b["status"] = "Available"
         # Close matching open transaction(s) for this book
         for t in transactions:
-            if t["book_no"] != b_no or t["status"] not in ["Reserved", "Borrowed"]:
+            if t["book_no"] != b_no or normalize(t.get("status")) not in ["reserved", "borrowed"]:
                 continue
 
             tx_request_id = str(t.get("request_id", "")).strip()
@@ -1316,7 +1317,7 @@ def api_process_trans():
             if not target_request_id and target_school_id and not school_id_match:
                 continue
 
-            if t["status"] == "Borrowed":
+            if normalize(t.get("status")) == "borrowed":
                 matched_transaction = True
 
             t["status"] = "Returned"
@@ -1328,7 +1329,7 @@ def api_process_trans():
             approval_log = []
         approval_changed = False
         for row in approval_log:
-            if row.get("book_no") != b_no or row.get("status") != "Borrowed":
+            if row.get("book_no") != b_no or normalize(row.get("status")) != "borrowed":
                 continue
 
             row_request_id = str(row.get("request_id", "")).strip()
