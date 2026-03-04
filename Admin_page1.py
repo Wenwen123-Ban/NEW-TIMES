@@ -5,6 +5,7 @@ import logging
 import sys
 import operator
 import random  # REQUIRED for Ticket Codes
+import re
 import string  # REQUIRED for Ticket Codes
 from flask import (
     Flask,
@@ -1407,6 +1408,13 @@ def api_process_trans():
             if selected:
                 reserved_transaction = selected
 
+        pickup_schedule = str((reserved_transaction or {}).get("pickup_schedule", "")).strip()
+        if pickup_schedule and return_due_date and return_due_date < pickup_schedule:
+            return (
+                jsonify({"success": False, "message": "You have picked backward! Pick a date forward!"}),
+                400,
+            )
+
         can_borrow = target_book and target_book.get("status") != "Borrowed"
 
         if can_borrow and reserved_transaction:
@@ -1482,6 +1490,24 @@ def api_reserve():
         reason = pickup_date_status.get("reason") or "Selected pickup date is restricted."
         return jsonify({"success": False, "status": "error", "message": reason}), 400
 
+    contact_type = str(data.get("contact_type", "")).strip().lower()
+    contact_value = str(data.get("phone_number", "")).strip()
+    if contact_type not in {"phone", "email"} or not contact_value:
+        return (
+            jsonify({"success": False, "status": "error", "message": "Must fill the credentials!"}),
+            400,
+        )
+    if contact_type == "phone" and not re.fullmatch(r"\d{11}", contact_value):
+        return (
+            jsonify({"success": False, "status": "error", "message": "Phone number must be exactly 11 numbers."}),
+            400,
+        )
+    if contact_type == "email" and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", contact_value):
+        return (
+            jsonify({"success": False, "status": "error", "message": "Please provide a valid email address."}),
+            400,
+        )
+
     # 1) Cleanup expired reservations for this user before any validation.
     expired_found = False
     for t in transactions:
@@ -1551,7 +1577,8 @@ def api_reserve():
                     "date": now.strftime("%Y-%m-%d %H:%M"),
                     "expiry": None,
                     "borrower_name": str(data.get("borrower_name", "")).strip(),
-                    "phone_number": str(data.get("phone_number", "")).strip(),
+                    "phone_number": contact_value,
+                    "contact_type": contact_type,
                     "pickup_location": str(data.get("pickup_location", "")).strip(),
                     "pickup_schedule": pickup_schedule,
                     "reservation_note": str(data.get("reservation_note", "")).strip(),

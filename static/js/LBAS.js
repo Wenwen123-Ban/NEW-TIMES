@@ -700,7 +700,11 @@ let currentID = null;
         document.getElementById("reserveBorrowerName").value =
           document.getElementById("full_name")?.innerText || "";
         document.getElementById("reserveBorrowerID").value = currentID || "";
-        document.getElementById("reservePhoneNumber").value = (currentProfile && currentProfile.phone_number) || "";
+        const reserveContactType = document.getElementById("reserveContactType");
+        const reserveContactInput = document.getElementById("reservePhoneNumber");
+        reserveContactType.value = "phone";
+        reserveContactInput.value = (currentProfile && currentProfile.phone_number) || "";
+        reserveContactInput.placeholder = "09XXXXXXXXX";
         document.getElementById("reserveBookCode").value = no;
         document.getElementById("reserveBookTitle").value = book.title || "Unknown Title";
         document.getElementById("reserveRequestID").value = `REQ-${Date.now().toString(36).toUpperCase()}`;
@@ -728,6 +732,28 @@ let currentID = null;
         }
       }
 
+      function isValidEmail(value) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+      }
+
+      function bindReserveCredentialType() {
+        const contactType = document.getElementById("reserveContactType");
+        const contactInput = document.getElementById("reservePhoneNumber");
+        if (!contactType || !contactInput || contactType.dataset.bound === "true") return;
+        contactType.addEventListener("change", () => {
+          const selectedType = contactType.value;
+          contactInput.value = "";
+          if (selectedType === "phone") {
+            contactInput.placeholder = "09XXXXXXXXX";
+          } else if (selectedType === "email") {
+            contactInput.placeholder = "name@example.com";
+          } else {
+            contactInput.placeholder = "Select a credential type first";
+          }
+        });
+        contactType.dataset.bound = "true";
+      }
+
       async function submitReserveForm() {
         const no = pendingReserveBookNo;
         if (!no) return;
@@ -742,10 +768,23 @@ let currentID = null;
         const bookCode = document.getElementById("reserveBookCode").value.trim();
         const bookTitle = document.getElementById("reserveBookTitle").value.trim();
         const requestID = document.getElementById("reserveRequestID").value.trim();
-        const phoneNumber = document.getElementById("reservePhoneNumber").value.trim();
+        const contactType = document.getElementById("reserveContactType").value.trim();
+        const contactValue = document.getElementById("reservePhoneNumber").value.trim();
 
         if (!borrowerName || !pickupSchedule) {
           alert("Please provide pickup date.");
+          return;
+        }
+        if (!contactType || !contactValue) {
+          alert("Must fill the credentials!");
+          return;
+        }
+        if (contactType === "phone" && !/^\d{11}$/.test(contactValue)) {
+          alert("Phone number must be exactly 11 numbers.");
+          return;
+        }
+        if (contactType === "email" && !isValidEmail(contactValue)) {
+          alert("Please enter a valid email address.");
           return;
         }
         if (pendingReservationRequests.has(no)) return;
@@ -774,7 +813,8 @@ let currentID = null;
               pickup_schedule: pickupSchedule,
               reservation_note: `${bookCode} - ${bookTitle}`,
               request_id: requestID,
-              phone_number: phoneNumber,
+              phone_number: contactValue,
+              contact_type: contactType,
             }),
           });
 
@@ -1136,6 +1176,8 @@ let currentID = null;
         leaderboardProfileModal = new bootstrap.Modal(
           document.getElementById("leaderboardProfileModal"),
         );
+
+        bindReserveCredentialType();
 
         document.addEventListener("click", (e) => {
           const categoryButton = e.target.closest(".category-btn");
