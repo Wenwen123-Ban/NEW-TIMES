@@ -542,7 +542,9 @@ let currentID = null;
             p.total_borrowed ?? 0;
           document.getElementById("leaderboardProfileBook").innerText =
             p.most_borrowed_book || "No records";
-          leaderboardProfileModal.show();
+          if (leaderboardProfileModal) {
+            leaderboardProfileModal.show();
+          }
         } catch (e) {
           console.error("Unable to load leaderboard profile.");
         }
@@ -1209,9 +1211,13 @@ let currentID = null;
 
         setStudentLoginStep("welcome");
         initStudentLoginSwipe();
-        leaderboardProfileModal = new bootstrap.Modal(
-          document.getElementById("leaderboardProfileModal"),
-        );
+        const leaderboardModalElement = document.getElementById("leaderboardProfileModal");
+        if (window.bootstrap?.Modal && leaderboardModalElement) {
+          leaderboardProfileModal = new window.bootstrap.Modal(leaderboardModalElement);
+        } else {
+          leaderboardProfileModal = null;
+          console.warn("[LBAS] Bootstrap modal unavailable. Leaderboard profile modal is disabled.");
+        }
 
         bindReserveCredentialType();
         document.getElementById("bookContainer")?.addEventListener("click", (event) => {
