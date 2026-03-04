@@ -483,7 +483,6 @@ let currentID = null;
           .classList.toggle("active", isLeaderboard);
         if (isLeaderboard) {
           loadLeaderboard();
-          loadMonthlyActivityGraph();
         }
       }
 
@@ -497,7 +496,7 @@ let currentID = null;
               .map(
                 (row, idx) => `
                   <tr role="button" onclick="openLeaderboardProfile('${row.school_id}')">
-                    <td class="fw-bold">#${row.rank || idx + 1}</td>
+                    <td class="fw-bold leaderboard-rank">#${row.rank || idx + 1}</td>
                     <td>
                       <div class="d-flex align-items-center gap-2">
                         <img src="/Profile/${row.photo || "default.png"}" class="rounded-circle" style="width:36px;height:36px;object-fit:cover;" alt="${row.name}">
@@ -507,7 +506,7 @@ let currentID = null;
                         </div>
                       </div>
                     </td>
-                    <td>${row.total_borrowed}</td>
+                    <td class="fw-bold leaderboard-total">${row.total_borrowed}</td>
                   </tr>
             `,
               )
@@ -516,46 +515,6 @@ let currentID = null;
         } catch (e) {
           document.getElementById("leaderboardBorrowersBody").innerHTML =
             '<tr><td colspan="3" class="text-danger text-center py-4">Unable to load leaderboard.</td></tr>';
-        }
-      }
-
-      async function loadMonthlyActivityGraph() {
-        const chart = document.getElementById("activityChart");
-        const totals = document.getElementById("activityTotals");
-        const monthLabel = document.getElementById("activityMonthLabel");
-        if (!chart || !totals || !monthLabel) return;
-
-        try {
-          const res = await fetch("/api/monthly_activity_logs");
-          const data = await res.json();
-          const days = Array.isArray(data.days) ? data.days : [];
-          const totalsData = data.totals || {};
-
-          monthLabel.innerText = `Month: ${data.month || "-"}`;
-          totals.innerHTML = `Logins: <span class="text-primary">${totalsData.login || 0}</span> • Reservations: <span class="text-success">${totalsData.reserve || 0}</span>`;
-
-          const highest = Math.max(
-            1,
-            ...days.map((d) => Math.max(Number(d.login || 0), Number(d.reserve || 0))),
-          );
-
-          chart.innerHTML = days
-            .map((day) => {
-              const label = String(day.day || "").slice(-2);
-              const loginHeight = Math.round((Number(day.login || 0) / highest) * 100);
-              const reserveHeight = Math.round((Number(day.reserve || 0) / highest) * 100);
-              return `
-                <div class="activity-day">
-                  <div class="activity-bars">
-                    <span class="bar-login" style="height:${loginHeight}%" title="Logins: ${day.login || 0}"></span>
-                    <span class="bar-reserve" style="height:${reserveHeight}%" title="Reservations: ${day.reserve || 0}"></span>
-                  </div>
-                  <div class="activity-day-label">${label}</div>
-                </div>`;
-            })
-            .join("");
-        } catch (error) {
-          chart.innerHTML = '<div class="text-danger small">Unable to load monthly activity logs.</div>';
         }
       }
 
