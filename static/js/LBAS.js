@@ -494,7 +494,9 @@ let currentID = null;
         try {
           const res = await fetch("/api/monthly_leaderboard");
           const data = await res.json();
-          const rows = data.top_borrowers || [];
+          const rows = Array.isArray(data?.top_borrowers)
+            ? data.top_borrowers
+            : [];
           document.getElementById("leaderboardBorrowersBody").innerHTML =
             rows
               .map(
@@ -607,13 +609,24 @@ let currentID = null;
           console.log("[LBAS] fetch <- statuses", { books: bRes.status, transactions: tRes.status });
 
           if (!bRes.ok) {
+            if (bRes.status === 401) {
+              showStatusPopup(
+                "warning",
+                "Session Expired",
+                "Your session has expired. Please login again to load books and reservations.",
+              );
+              logout();
+              return;
+            }
             document.getElementById("bookContainer").innerHTML =
               '<div class="text-center text-danger mt-5"><i class="fas fa-lock fa-2x mb-3"></i><br>Unable to load books. Please login again.</div>';
             return;
           }
 
           const books = await bRes.json();
-          const trans = parseTransactionPayload(await tRes.json());
+          const trans = tRes.ok
+            ? parseTransactionPayload(await tRes.json())
+            : [];
 
           if (!Array.isArray(books)) {
             document.getElementById("bookContainer").innerHTML =
@@ -1227,7 +1240,7 @@ let currentID = null;
         hydrateDisplaySettings();
         const savedID = localStorage.getItem("lbas_id");
         const savedToken = localStorage.getItem("lbas_token");
-        if (savedID) {
+        if (savedID && savedToken) {
           currentID = savedID;
           currentToken = savedToken;
           fetch("/api/user/" + savedID)
@@ -1240,6 +1253,9 @@ let currentID = null;
               }
             })
             .catch(logout);
+        } else if (savedID || savedToken) {
+          localStorage.removeItem("lbas_id");
+          localStorage.removeItem("lbas_token");
         }
       }
 
