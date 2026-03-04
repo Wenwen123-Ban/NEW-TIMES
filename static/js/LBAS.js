@@ -677,11 +677,17 @@ let currentID = null;
                     <span class="text-muted" style="font-size: 10px; font-weight:700;">${b.category.toUpperCase()}</span>
                     <div class="fw-bold text-dark mt-1">${b.title}</div>
                     <code class="small text-primary fw-bold">${b.book_no}</code>
-                    ${b.status !== "Borrowed" ? `<button class="btn-action shadow-sm" data-book-no="${b.book_no}" onclick="reserveBook('${b.book_no}')">RESERVE BOOK</button>` : ""}
+                    ${b.status !== "Borrowed" ? `<button class="btn-action shadow-sm reserve-book-btn" data-book-no="${b.book_no}">RESERVE BOOK</button>` : ""}
                 </div>`,
               )
               .join("") ||
             '<div class="text-center text-muted mt-5"><i class="fas fa-book-open fa-2x mb-3 opacity-25"></i><br>No books found.</div>';
+
+          document.querySelectorAll(".reserve-book-btn").forEach((button) => {
+            button.addEventListener("click", () => {
+              reserveBook(button.dataset.bookNo || "");
+            });
+          });
 
           renderActiveLeases();
         } catch (e) {
