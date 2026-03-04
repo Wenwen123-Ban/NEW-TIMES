@@ -673,11 +673,9 @@ def api_register_request():
     name = request.form.get("name")
     school_id = str(request.form.get("school_id", "")).strip().lower()
     password = request.form.get("password")
-    role = str(request.form.get("role", "student")).strip().lower()
+    role = "student"
     photo = request.files.get("photo")
 
-    if role not in ["student", "admin"]:
-        role = "student"
     if not name or not school_id or not password:
         return jsonify({"success": False, "message": "Missing required fields"}), 400
     if find_any_user(school_id):
@@ -891,6 +889,27 @@ def api_login():
 
     user = find_any_user(s_id)
     if not user:
+        registration_requests = get_db("registration_requests")
+        if isinstance(registration_requests, list):
+            pending_request = next(
+                (
+                    row
+                    for row in registration_requests
+                    if str(row.get("school_id", "")).strip().lower() == s_id
+                    and str(row.get("status", "pending")).strip().lower() == "pending"
+                ),
+                None,
+            )
+            if pending_request:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "Your account still Pending for approval",
+                        }
+                    ),
+                    401,
+                )
         return jsonify({"success": False, "message": "ID not found"}), 404
 
     if user["status"] == "pending":

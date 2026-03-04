@@ -184,6 +184,7 @@ let editModal;
             filterInventory(); // Re-apply active category/search filters to fresh data
             syncMonitor();
             renderUsersList();
+            renderRegistrationRequestBadge();
             renderRegistrationRequests();
             renderBorrowedBooksList();
             renderBookRegistrationStats();
@@ -462,6 +463,27 @@ let editModal;
         }
     }
 
+
+    function getRegistrationRequestCounts() {
+        const rows = Array.isArray(masterRegistrationRequests) ? masterRegistrationRequests : [];
+        const pending = rows.filter((row) => String(row.status || 'pending').toLowerCase() === 'pending').length;
+        const nonRejected = rows.filter((row) => String(row.status || 'pending').toLowerCase() !== 'rejected').length;
+        return { pending, nonRejected };
+    }
+
+    function renderRegistrationRequestBadge() {
+        const badge = document.getElementById('registrationRequestBadge');
+        if (!badge) return;
+        const { pending } = getRegistrationRequestCounts();
+        if (pending > 0) {
+            badge.style.display = 'inline-flex';
+            badge.innerText = String(pending);
+        } else {
+            badge.style.display = 'none';
+            badge.innerText = '0';
+        }
+    }
+
     function renderRegistrationRequests() {
         const body = document.getElementById('registrationRequestsBody');
         if (!body) return;
@@ -602,6 +624,7 @@ let editModal;
         ).size;
         const reserved = Math.max(reservedFromBooks, reservedFromTransactions);
         const borrowed = Math.max(borrowedFromBooks, borrowedFromTransactions);
+        const { pending: pendingRegistrationRequests, nonRejected: activeRegistrationRequests } = getRegistrationRequestCounts();
         const categoryCounts = masterBooks.reduce((acc, book) => {
             const category = String(book.category || '').trim() || 'Uncategorized';
             acc[category] = (acc[category] || 0) + 1;
@@ -626,6 +649,8 @@ let editModal;
                 <div class="col-md-6 col-lg-2"><div class="registration-stat-card"><div class="registration-stat-label">Available</div><div class="registration-stat-value">${available}</div></div></div>
                 <div class="col-md-6 col-lg-2"><div class="registration-stat-card"><div class="registration-stat-label">Reserved</div><div class="registration-stat-value">${reserved}</div></div></div>
                 <div class="col-md-6 col-lg-2"><div class="registration-stat-card"><div class="registration-stat-label">Borrowed</div><div class="registration-stat-value">${borrowed}</div></div></div>
+                <div class="col-md-6 col-lg-3"><div class="registration-stat-card"><div class="registration-stat-label">Registration Request (Pending)</div><div class="registration-stat-value">${pendingRegistrationRequests}</div></div></div>
+                <div class="col-md-6 col-lg-3"><div class="registration-stat-card"><div class="registration-stat-label">Registration Request (Not Rejected)</div><div class="registration-stat-value">${activeRegistrationRequests}</div></div></div>
             </div>
             <div class="row g-3 mt-1">
                 ${categoryCards || '<div class="col-12"><div class="registration-stat-card text-center">No registered categories yet.</div></div>'}

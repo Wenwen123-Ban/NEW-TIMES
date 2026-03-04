@@ -83,6 +83,7 @@
         </a>
         <a class="nav-link text-white-50" id="linkRegistrationRequests" onclick="switchView('registrationRequests')">
             <span><i class="fas fa-user-check me-3"></i>Registration Requests</span>
+            <span id="registrationRequestBadge" class="badge bg-warning text-dark rounded-pill" style="display:none;">0</span>
         </a>
         <a class="nav-link text-white-50" id="linkInventory" onclick="switchView('inventory')">
             <span><i class="fas fa-book-reader me-3"></i>Inventory</span>
@@ -136,45 +137,6 @@
 
     <div id="consoleView" class="view-section active">
         <div class="row g-4">
-            <div class="col-12">
-                <div class="card glass-card p-4 h-100 border-top border-4 border-primary position-relative" id="bulkCard">
-                    <div class="control-lock-overlay"><i class="fas fa-database lock-icon"></i><p class="fw-bold text-white">Restricted Access</p></div>
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="fw-bold mb-0"><i class="fas fa-file-import text-primary me-2"></i>Batch Asset Import</h5>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="wipeCheck">
-                            <label class="form-check-label small text-danger fw-bold" for="wipeCheck">Wipe Existing Data</label>
-                        </div>
-                    </div>
-                    
-                    <div class="d-flex gap-2 mb-3 batch-category-dropdown">
-                        <select id="batchCategorySelect" class="form-select fw-bold text-muted batch-category-dropdown">
-                            <option value="General">Target: General Collection</option>
-                            <option value="Mathematics">Target: Mathematics</option>
-                            <option value="Science">Target: Science & Tech</option>
-                            <option value="Literature">Target: Literature</option>
-                        </select>
-                        <button class="btn btn-outline-secondary fw-bold" type="button" onclick="addCustomCategory()">
-                            <i class="fas fa-plus"></i> New
-                        </button>
-                    </div>
-                    <button class="btn btn-sm btn-danger mt-2" type="button" onclick="confirmDeleteCategoryFromDropdown()">
-                        Delete Selected Category
-                    </button>
-                    
-                    <textarea id="bulkArea" class="form-control font-monospace mb-4 bg-light" rows="6" placeholder="Instructions:&#10;Paste book list here. The selected category above applies to ALL items unless specified.&#10;&#10;Supported Formats:&#10;CODE | Title&#10;CODE, Title&#10;CODE Title&#10;&#10;Examples:&#10;MAT101, Advanced Algebra&#10;SCI202 Biology Basics"></textarea>
-                    <button class="btn btn-primary w-100 fw-bold py-2 shadow-sm" onclick="submitBulk()">EXECUTE BATCH SYNC</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="row g-4 mt-1">
-            <div class="col-lg-6">
-                <div class="card glass-card p-4 h-100 border-0 shadow-sm">
-                    <h6 class="fw-bold mb-3"><i class="fas fa-book-medical text-primary me-2"></i>Registered Books/Library System Summary</h6>
-                    <div id="bookRegistrationStats" class="small text-muted">Waiting for live data...</div>
-                </div>
-            </div>
             <div class="col-lg-6">
                 <div class="card glass-card p-4 h-100 border-0 shadow-sm">
                     <h6 class="fw-bold mb-3"><i class="fas fa-user-plus text-success me-2"></i>Quick Register (Student / Admin)</h6>
@@ -199,6 +161,42 @@
                         <input type="file" id="quickRegPhoto" class="form-control bg-light border-0" accept="image/*">
                     </div>
                     <button class="btn btn-primary fw-bold" onclick="submitQuickRegister()">CREATE DATABASE ENTRY</button>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card glass-card p-4 h-100 border-top border-4 border-primary position-relative" id="bulkCard">
+                    <div class="control-lock-overlay"><i class="fas fa-database lock-icon"></i><p class="fw-bold text-white">Restricted Access</p></div>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="fw-bold mb-0"><i class="fas fa-file-import text-primary me-2"></i>Batch Asset Import</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="wipeCheck">
+                            <label class="form-check-label small text-danger fw-bold" for="wipeCheck">Wipe Existing Data</label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mb-3 batch-category-dropdown">
+                        <select id="batchCategorySelect" class="form-select fw-bold text-muted batch-category-dropdown">
+                            <option value="General">Target: General Collection</option>
+                            <option value="Mathematics">Target: Mathematics</option>
+                            <option value="Science">Target: Science & Tech</option>
+                            <option value="Literature">Target: Literature</option>
+                        </select>
+                        <button class="btn btn-outline-secondary fw-bold" type="button" onclick="addCustomCategory()">
+                            <i class="fas fa-plus"></i> New
+                        </button>
+                    </div>
+                    <button class="btn btn-sm btn-danger mt-2" type="button" onclick="confirmDeleteCategoryFromDropdown()">
+                        Delete Selected Category
+                    </button>
+
+                    <textarea id="bulkArea" class="form-control font-monospace mb-4 bg-light" rows="6" placeholder="Instructions:&#10;Paste book list here. The selected category above applies to ALL items unless specified.&#10;&#10;Supported Formats:&#10;CODE | Title&#10;CODE, Title&#10;CODE Title&#10;&#10;Examples:&#10;MAT101, Advanced Algebra&#10;SCI202 Biology Basics"></textarea>
+                    <button class="btn btn-primary w-100 fw-bold py-2 shadow-sm" onclick="submitBulk()">EXECUTE BATCH SYNC</button>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card glass-card p-4 h-100 border-0 shadow-sm">
+                    <h6 class="fw-bold mb-3"><i class="fas fa-book-medical text-primary me-2"></i>Registered Books/Library System Summary</h6>
+                    <div id="bookRegistrationStats" class="small text-muted">Waiting for live data...</div>
                 </div>
             </div>
         </div>

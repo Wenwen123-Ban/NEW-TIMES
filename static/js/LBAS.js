@@ -393,7 +393,7 @@ let currentID = null;
               showStatusPopup(
                 "warning",
                 "Approval Pending",
-                "Your account is waiting for Librarian review. Please check back later.",
+                "Your account still Pending for approval",
               );
               err.style.display = "none"; // Hide the red error box if showing popup
             } else if (res.status === 404) {
@@ -968,7 +968,6 @@ let currentID = null;
         const name = document.getElementById("regName")?.value.trim();
         const schoolID = document.getElementById("regID")?.value.trim();
         const password = document.getElementById("regPass")?.value;
-        const role = document.getElementById("regRole")?.value || "student";
         const photo = document.getElementById("regPhoto")?.files?.[0];
 
         if (!name || !schoolID || !password) {
@@ -980,7 +979,7 @@ let currentID = null;
         form.append("name", name);
         form.append("school_id", schoolID);
         form.append("password", password);
-        form.append("role", role);
+        form.append("role", "student");
         if (photo) form.append("photo", photo);
 
         try {
@@ -1003,8 +1002,6 @@ let currentID = null;
           const el = document.getElementById(id);
           if (el) el.value = "";
         });
-        const role = document.getElementById("regRole");
-        if (role) role.value = "student";
         const photoInput = document.getElementById("regPhoto");
         if (photoInput) photoInput.value = "";
         const preview = document.getElementById("previewImg");
