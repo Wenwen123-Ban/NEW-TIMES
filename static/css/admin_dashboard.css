@@ -37,7 +37,11 @@
             overflow: hidden;
         }
         /* Navigation & Sidebar */
-        .sidebar { background: var(--admin-dark); color: white; position: sticky; top: 0; z-index: 100; width: var(--sidebar-w); padding: 25px; transition: 0.3s; display: flex; flex-direction: column; border-right: 1px solid #1e293b; max-height: calc(100vh - var(--admin-header-height)); }
+        .sidebar { background: var(--admin-dark); color: white; position: sticky; top: 0; z-index: 100; width: var(--sidebar-w); padding: 25px; transition: 0.3s; display: flex; flex-direction: column; border-right: 1px solid #1e293b; max-height: calc(100vh - var(--admin-header-height)); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
+
+        .sidebar::-webkit-scrollbar { width: 8px; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.45); border-radius: 999px; }
+        .sidebar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.7); }
 
         header {
             position: relative;
