@@ -18,7 +18,7 @@
         padding: 0;
         background: url("https://www.tangubcity.gov.ph/application/files/1116/1768/0018/NEW_6322.JPG") no-repeat center center;
         background-size: cover;
-        background-attachment: scroll;
+        background-attachment: fixed;
         background-repeat: no-repeat;
         font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         overflow-x: hidden;
@@ -718,6 +718,21 @@
         font-size: 14px;
       }
 
+
+      .welcome-flow-card,
+      .login-card,
+      .book-item,
+      .book-card,
+      .mobile-nav,
+      .custom-modal,
+      #portalSection .container,
+      #portalSection .card,
+      #portalSection .modal-content,
+      .lbas-definition {
+        width: 100%;
+        max-width: 100%;
+      }
+
       @keyframes slideDown {
         from {
           transform: translateY(-20px);
@@ -753,6 +768,18 @@
       @media (max-width: 768px) {
         .hidden-mobile {
           display: none !important;
+        }
+
+        body {
+          background-attachment: scroll;
+        }
+
+        input,
+        select,
+        textarea,
+        .form-control,
+        .btn {
+          font-size: 16px !important;
         }
 
         .show-login {
@@ -819,13 +846,23 @@
 
         .welcome-slider-wrap {
           align-items: stretch;
-          gap: 10px;
+          gap: 8px;
+          width: min(100%, 520px);
+        }
+
+        .slide-nav-btn {
+          width: 40px;
+          height: 40px;
+          min-width: 40px;
+          min-height: 40px;
         }
 
         .welcome-flow-card,
         .login-card {
           width: min(100%, 360px);
           margin: 0 auto;
+          padding: 20px;
+          border-radius: 18px;
         }
 
         #accountPanel,
@@ -917,9 +954,25 @@
         }
       }
 
+
       @media (max-width: 576px) {
+        .custom-modal {
+          max-width: 100%;
+          padding: 18px;
+          border-radius: 16px;
+          max-height: calc(100dvh - 24px);
+          overflow-y: auto;
+        }
+
+        .modal-overlay {
+          padding: 12px;
+          align-items: flex-end;
+        }
+
         #bookContainer {
           grid-template-columns: 1fr;
+          padding: 12px;
+          gap: 12px;
         }
 
         .system-title h1 {
