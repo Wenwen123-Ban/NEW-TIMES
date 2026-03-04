@@ -887,7 +887,7 @@ let currentID = null;
             }),
           });
           const data = await res.json();
-          if (!res.ok || !data.success) {
+          if (!res.ok || !data?.success) {
             alert(data.message || "Unable to cancel reservation.");
             return;
           }
@@ -964,11 +964,20 @@ let currentID = null;
         reader.readAsDataURL(input.files[0]);
       }
 
+      async function parseJsonSafe(response) {
+        try {
+          return await response.json();
+        } catch (_error) {
+          return null;
+        }
+      }
+
       async function submitRegistrationRequest() {
         const name = document.getElementById("regName")?.value.trim();
         const schoolID = document.getElementById("regID")?.value.trim();
         const password = document.getElementById("regPass")?.value;
         const photo = document.getElementById("regPhoto")?.files?.[0];
+        const submitButton = document.querySelector('#registerModal button[onclick="submitRegistrationRequest()"]');
 
         if (!name || !schoolID || !password) {
           alert("Please fill out Profile Name, ID, and Password.");
@@ -983,10 +992,22 @@ let currentID = null;
         if (photo) form.append("photo", photo);
 
         try {
+          if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = "SUBMITTING...";
+          }
+
           const res = await fetch("/api/register_request", { method: "POST", body: form });
-          const data = await res.json();
-          if (!res.ok || !data.success) {
-            alert(data.message || "Unable to submit registration request.");
+          const data = await parseJsonSafe(res);
+          if (!res.ok || !data?.success) {
+            const backendMessage = data?.message || "Unable to submit registration request.";
+            if (backendMessage === "ID Exists") {
+              alert("School ID already exists. Please use another ID or log in instead.");
+            } else if (backendMessage === "Existing pending request") {
+              alert("This School ID already has a pending registration request.");
+            } else {
+              alert(backendMessage);
+            }
             return;
           }
 
@@ -994,6 +1015,11 @@ let currentID = null;
           showStatusPopup("success", "Request Submitted", `Your Request ID is ${data.request_id}. Wait for admin approval.`);
         } catch (error) {
           alert("Network Error during registration.");
+        } finally {
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = "SUBMIT REQUEST";
+          }
         }
       }
 
