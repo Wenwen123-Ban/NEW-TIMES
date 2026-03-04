@@ -891,8 +891,28 @@ let editModal;
         document.getElementById('borrowPickupDate').value = transaction.pickup_schedule || transaction.date || '-';
         document.getElementById('borrowApprovedBy').value = approvedBy;
         document.getElementById('borrowRequestId').value = transaction.request_id || `REQ-${Date.now().toString(36).toUpperCase()}`;
-        document.getElementById('borrowReturnDate').value = '';
+        const pickupDate = String(transaction.pickup_schedule || '').trim();
+        const returnDateInput = document.getElementById('borrowReturnDate');
+        returnDateInput.value = '';
+        returnDateInput.dataset.minPickupDate = pickupDate;
+        if (pickupDate) {
+            returnDateInput.min = pickupDate;
+        } else {
+            returnDateInput.removeAttribute('min');
+        }
         borrowModal.show();
+    }
+
+    function validateBorrowReturnDateSelection() {
+        const returnDateInput = document.getElementById('borrowReturnDate');
+        const minPickupDate = String(returnDateInput.dataset.minPickupDate || '').trim();
+        const selectedDate = String(returnDateInput.value || '').trim();
+        if (minPickupDate && selectedDate && selectedDate < minPickupDate) {
+            alert('You have picked backward! Pick a date forward!');
+            returnDateInput.value = '';
+            return false;
+        }
+        return true;
     }
 
     async function submitBorrowForm() {
@@ -901,6 +921,7 @@ let editModal;
         const approved_by = document.getElementById('borrowApprovedBy').value;
         const request_id = document.getElementById('borrowRequestId').value;
         if (!return_due_date) return alert('Please set return date.');
+        if (!validateBorrowReturnDateSelection()) return;
         try {
             const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'borrow', return_due_date, approved_by, request_id }) });
             const data = await res.json();
@@ -913,6 +934,8 @@ let editModal;
             alert('Unable to borrow book.');
         }
     }
+
+    document.getElementById('borrowReturnDate')?.addEventListener('change', validateBorrowReturnDateSelection);
 
     async function syncMonitor() {
         const active = masterTransactions.filter((t) => {
