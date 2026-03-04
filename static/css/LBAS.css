@@ -549,6 +549,23 @@
         background: rgba(255, 255, 255, 0.09) !important;
       }
 
+
+      #leaderboardSection .leaderboard-card thead {
+        background: rgba(255, 255, 255, 0.08) !important;
+      }
+
+      #leaderboardSection .leaderboard-card .table th {
+        color: #c9d5e6 !important;
+      }
+
+      #leaderboardSection .leaderboard-card .leaderboard-rank {
+        color: #dce6f5 !important;
+      }
+
+      #leaderboardSection .leaderboard-card .leaderboard-total {
+        color: #9fd3ff !important;
+      }
+
       .btn-primary,
       #portalSection .btn.btn-dark,
       #loginSection #loginBtn {
