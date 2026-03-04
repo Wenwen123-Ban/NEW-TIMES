@@ -949,8 +949,78 @@ let currentID = null;
         }
       }
 
+      function previewPhoto(input) {
+        if (!(input.files && input.files[0])) return;
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          const preview = document.getElementById("previewImg");
+          const icon = document.getElementById("uploadIcon");
+          if (preview && event.target?.result) {
+            preview.src = event.target.result;
+            preview.style.display = "block";
+          }
+          if (icon) icon.style.display = "none";
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+
+      async function submitRegistrationRequest() {
+        const name = document.getElementById("regName")?.value.trim();
+        const schoolID = document.getElementById("regID")?.value.trim();
+        const password = document.getElementById("regPass")?.value;
+        const role = document.getElementById("regRole")?.value || "student";
+        const photo = document.getElementById("regPhoto")?.files?.[0];
+
+        if (!name || !schoolID || !password) {
+          alert("Please fill out Profile Name, ID, and Password.");
+          return;
+        }
+
+        const form = new FormData();
+        form.append("name", name);
+        form.append("school_id", schoolID);
+        form.append("password", password);
+        form.append("role", role);
+        if (photo) form.append("photo", photo);
+
+        try {
+          const res = await fetch("/api/register_request", { method: "POST", body: form });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            alert(data.message || "Unable to submit registration request.");
+            return;
+          }
+
+          toggleModal("registerModal", false);
+          showStatusPopup("success", "Request Submitted", `Your Request ID is ${data.request_id}. Wait for admin approval.`);
+        } catch (error) {
+          alert("Network Error during registration.");
+        }
+      }
+
+      function resetRegistrationForm() {
+        ["regName", "regID", "regPass"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        const role = document.getElementById("regRole");
+        if (role) role.value = "student";
+        const photoInput = document.getElementById("regPhoto");
+        if (photoInput) photoInput.value = "";
+        const preview = document.getElementById("previewImg");
+        const icon = document.getElementById("uploadIcon");
+        if (preview) {
+          preview.removeAttribute("src");
+          preview.style.display = "none";
+        }
+        if (icon) icon.style.display = "block";
+      }
+
       function toggleModal(id, show) {
         document.getElementById(id).style.display = show ? "flex" : "none";
+        if (id === "registerModal" && !show) {
+          resetRegistrationForm();
+        }
       }
 
       function openAccountModal() {

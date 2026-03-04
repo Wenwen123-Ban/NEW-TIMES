@@ -51,6 +51,7 @@ DB_FILES = {
     "date_restricted": "Date_Restricted.json",
     "reservation_transactions": "reservation_transaction.json",
     "admin_approval_record": "Admin_approval_record.json",
+    "registration_requests": "registration_requests.json",
     "log_rec": "log_rec.json",
 }
 
@@ -137,6 +138,53 @@ def sanitize_creator_name(value):
 def generate_request_id(prefix="REQ"):
     rand = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return f"{prefix}-{datetime.now().strftime('%Y%m%d')}-{rand}"
+
+
+def save_profile_photo(photo, school_id):
+    """Save uploaded profile pictures in ./Profile using predictable per-ID filenames."""
+    saved_photo = "default.png"
+    if not (photo and getattr(photo, "filename", "")):
+        return saved_photo
+
+    _, ext = os.path.splitext(photo.filename)
+    ext = (ext or ".png").lower()
+    if len(ext) > 10:
+        ext = ".png"
+
+    sid = secure_filename(str(school_id).strip().lower()) or "user"
+    filename = f"{sid}_profile{ext}"
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    photo.save(file_path)
+    return filename
+
+
+def create_account_entry(target_db_key, category_name, name, school_id, password, photo):
+    s_id = str(school_id or "").strip().lower()
+    if not name or not s_id or not password:
+        return False, "Missing required fields"
+
+    if find_any_user(s_id):
+        return False, "ID Exists"
+
+    saved_photo = save_profile_photo(photo, s_id)
+    registry = get_db(target_db_key)
+    if not isinstance(registry, list):
+        registry = []
+
+    registry.append(
+        {
+            "name": str(name).strip(),
+            "school_id": s_id,
+            "password": password,
+            "category": category_name,
+            "photo": saved_photo,
+            "status": "approved",
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "phone_number": "",
+        }
+    )
+    save_db(target_db_key, registry)
+    return True, saved_photo
 
 
 def initialize_system():
@@ -588,6 +636,159 @@ def bulk_register():
     except Exception as e:
         logger.error(f"Bulk Import Failed: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/register_student", methods=["POST"])
+def api_register_student():
+    name = request.form.get("name")
+    school_id = request.form.get("school_id")
+    password = request.form.get("password")
+    photo = request.files.get("photo")
+
+    ok, payload = create_account_entry(
+        "users", "Student", name, school_id, password, photo
+    )
+    if not ok:
+        return jsonify({"success": False, "message": payload}), 400
+    return jsonify({"success": True, "photo": payload})
+
+
+@app.route("/api/register_librarian", methods=["POST"])
+def api_register_librarian():
+    name = request.form.get("name")
+    school_id = request.form.get("school_id")
+    password = request.form.get("password")
+    photo = request.files.get("photo")
+
+    ok, payload = create_account_entry(
+        "admins", "Staff", name, school_id, password, photo
+    )
+    if not ok:
+        return jsonify({"success": False, "message": payload}), 400
+    return jsonify({"success": True, "photo": payload})
+
+
+@app.route("/api/register_request", methods=["POST"])
+def api_register_request():
+    name = request.form.get("name")
+    school_id = str(request.form.get("school_id", "")).strip().lower()
+    password = request.form.get("password")
+    role = str(request.form.get("role", "student")).strip().lower()
+    photo = request.files.get("photo")
+
+    if role not in ["student", "admin"]:
+        role = "student"
+    if not name or not school_id or not password:
+        return jsonify({"success": False, "message": "Missing required fields"}), 400
+    if find_any_user(school_id):
+        return jsonify({"success": False, "message": "ID Exists"}), 400
+
+    requests = get_db("registration_requests")
+    if not isinstance(requests, list):
+        requests = []
+
+    pending_for_id = next(
+        (
+            row
+            for row in requests
+            if str(row.get("school_id", "")).strip().lower() == school_id
+            and str(row.get("status", "pending")).strip().lower() == "pending"
+        ),
+        None,
+    )
+    if pending_for_id:
+        return jsonify({"success": False, "message": "Existing pending request"}), 400
+
+    req_id = generate_request_id("REG")
+    saved_photo = save_profile_photo(photo, school_id)
+
+    requests.append(
+        {
+            "request_id": req_id,
+            "name": str(name).strip(),
+            "school_id": school_id,
+            "password": password,
+            "role": role,
+            "photo": saved_photo,
+            "status": "pending",
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        }
+    )
+    save_db("registration_requests", requests)
+    return jsonify({"success": True, "request_id": req_id})
+
+
+@app.route("/api/admin/registration-requests")
+def api_admin_get_registration_requests():
+    if not require_admin_session():
+        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+    rows = get_db("registration_requests")
+    if not isinstance(rows, list):
+        rows = []
+    return jsonify(rows)
+
+
+@app.route("/api/admin/registration-requests/<request_id>/decision", methods=["POST"])
+def api_admin_decide_registration_request(request_id):
+    admin_id = require_admin_session()
+    if not admin_id:
+        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+
+    decision = str((request.get_json(silent=True) or {}).get("decision", "")).strip().lower()
+    if decision not in ["approve", "reject"]:
+        return jsonify({"success": False, "message": "Invalid decision"}), 400
+
+    rows = get_db("registration_requests")
+    if not isinstance(rows, list):
+        rows = []
+
+    target = next((row for row in rows if row.get("request_id") == request_id), None)
+    if not target:
+        return jsonify({"success": False, "message": "Request not found"}), 404
+    if str(target.get("status", "pending")).lower() != "pending":
+        return jsonify({"success": False, "message": "Request already resolved"}), 400
+
+    target["reviewed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    target["reviewed_by"] = admin_id
+
+    if decision == "reject":
+        target["status"] = "rejected"
+        save_db("registration_requests", rows)
+        return jsonify({"success": True, "decision": "rejected"})
+
+    role = str(target.get("role", "student")).strip().lower()
+    db_key = "admins" if role == "admin" else "users"
+    category = "Staff" if role == "admin" else "Student"
+
+    ok, message = create_account_entry(
+        db_key,
+        category,
+        target.get("name"),
+        target.get("school_id"),
+        target.get("password"),
+        None,
+    )
+    if not ok:
+        return jsonify({"success": False, "message": message}), 400
+
+    registry = get_db(db_key)
+    if isinstance(registry, list):
+        account = next(
+            (
+                row
+                for row in registry
+                if str(row.get("school_id", "")).strip().lower()
+                == str(target.get("school_id", "")).strip().lower()
+            ),
+            None,
+        )
+        if account and target.get("photo"):
+            account["photo"] = target["photo"]
+            save_db(db_key, registry)
+
+    target["status"] = "approved"
+    save_db("registration_requests", rows)
+    return jsonify({"success": True, "decision": "approved"})
 
 
 @app.route("/api/request_reset", methods=["POST"])

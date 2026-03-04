@@ -93,6 +93,46 @@
       </div>
     </div>
 
+    <div id="registerModal" class="modal-overlay">
+      <div class="custom-modal text-start">
+        <h4 class="fw-bold text-center mb-1">Create Account Request</h4>
+        <p class="text-muted small text-center mb-4">Submit your details for librarian approval.</p>
+
+        <div class="upload-circle" onclick="document.getElementById('regPhoto').click()">
+          <i class="fas fa-camera upload-icon" id="uploadIcon"></i>
+          <img id="previewImg" alt="Profile preview" />
+        </div>
+
+        <input type="file" id="regPhoto" accept="image/*" style="display: none" onchange="previewPhoto(this)" />
+
+        <div class="mb-3">
+          <label class="small fw-bold ms-2">Profile Name</label>
+          <input type="text" id="regName" class="form-control rounded-pill bg-light border-0 px-3" placeholder="e.g. Juan Dela Cruz" />
+        </div>
+
+        <div class="mb-3">
+          <label class="small fw-bold ms-2">School ID</label>
+          <input type="text" id="regID" class="form-control rounded-pill bg-light border-0 px-3" placeholder="e.g. 2023-0015" />
+        </div>
+
+        <div class="mb-3">
+          <label class="small fw-bold ms-2">Create Password</label>
+          <input type="password" id="regPass" class="form-control rounded-pill bg-light border-0 px-3" placeholder="••••••••" />
+        </div>
+
+        <div class="mb-4">
+          <label class="small fw-bold ms-2">Account Type</label>
+          <select id="regRole" class="form-select rounded-pill bg-light border-0 px-3">
+            <option value="student">Student</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 mb-2" onclick="submitRegistrationRequest()">SUBMIT REQUEST</button>
+        <button class="btn btn-outline-secondary w-100 rounded-pill fw-bold py-2" onclick="toggleModal('registerModal', false)">CANCEL</button>
+      </div>
+    </div>
+
     <div id="loginSection" class="content">
       <div class="welcome-slider-wrap">
         <button id="studentPrevBtn" class="slide-nav-btn" onclick="shiftStudentLoginStep(-1)">&lt;</button>
@@ -151,7 +191,10 @@
           ID LOGIN
         </button>
 
-        <p class="small text-muted">Registration is managed by the official school database.</p>
+        <p class="small text-muted mb-2">Registration is managed by the official school database.</p>
+        <button class="btn btn-outline-primary btn-sm rounded-pill fw-bold" onclick="toggleModal('registerModal', true)">
+          Create Account
+        </button>
 
         <div
           id="loginError"

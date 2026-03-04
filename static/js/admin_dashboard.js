@@ -5,6 +5,7 @@ let currentRole = 'student',
         masterTransactions = [],
         masterCategories = [],
         masterApprovalRecords = [],
+        masterRegistrationRequests = [],
         adminHistory = JSON.parse(localStorage.getItem('adminHistory') || '[]'), 
         isStaff = false, 
         activeFilterCat = 'All',
@@ -97,6 +98,7 @@ let editModal;
     let leaderboardProfileModal;
     let transactionDetailModal;
     let borrowModal;
+    let registrationRequestModal;
     let dashboardInitialized = false;
 
     function initializeDashboard() {
@@ -107,6 +109,7 @@ let editModal;
         leaderboardProfileModal = new bootstrap.Modal(document.getElementById('leaderboardProfileModal'));
         transactionDetailModal = new bootstrap.Modal(document.getElementById('transactionDetailModal'));
         borrowModal = new bootstrap.Modal(document.getElementById('borrowModal'));
+        registrationRequestModal = new bootstrap.Modal(document.getElementById('registrationRequestModal'));
 
         mountAdminDropdown();
         bindDashboardDelegatedEvents();
@@ -145,16 +148,17 @@ let editModal;
     async function loadData(resetFilter = false) {
         try {
             const preservedFilterCat = activeFilterCat;
-            console.log('[ADMIN] fetch -> /api/admin/books /api/admin/users /api/admin/admins /api/admin/transactions /api/categories /api/admin/approval-records');
-            const [bRes, uRes, aRes, tRes, cRes, approvalRes] = await Promise.all([
+            console.log('[ADMIN] fetch -> /api/admin/books /api/admin/users /api/admin/admins /api/admin/transactions /api/categories /api/admin/approval-records /api/admin/registration-requests');
+            const [bRes, uRes, aRes, tRes, cRes, approvalRes, registrationRes] = await Promise.all([
                 apiFetch('/api/admin/books', { method: 'GET' }, false),
                 apiFetch('/api/admin/users', { method: 'GET' }, false), 
                 apiFetch('/api/admin/admins', { method: 'GET' }, false),
                 apiFetch('/api/admin/transactions', { method: 'GET' }, false),
                 apiFetch('/api/categories', { method: 'GET' }, false),
-                apiFetch('/api/admin/approval-records', { method: 'GET' }, false)
+                apiFetch('/api/admin/approval-records', { method: 'GET' }, false),
+                apiFetch('/api/admin/registration-requests', { method: 'GET' }, false)
             ]);
-            console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status, categories: cRes.status, approvals: approvalRes.status });
+            console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status, categories: cRes.status, approvals: approvalRes.status, registrations: registrationRes.status });
 
             masterBooks = await bRes.json();
             const allUsers = await uRes.json();
@@ -162,12 +166,14 @@ let editModal;
             masterTransactions = await tRes.json();
             masterCategories = await cRes.json();
             masterApprovalRecords = await approvalRes.json();
+            masterRegistrationRequests = await registrationRes.json();
 
             if (!Array.isArray(masterBooks)) masterBooks = [];
             if (!Array.isArray(masterAdmins)) masterAdmins = [];
             if (!Array.isArray(masterTransactions)) masterTransactions = [];
             if (!Array.isArray(masterCategories)) masterCategories = [];
             if (!Array.isArray(masterApprovalRecords)) masterApprovalRecords = [];
+            if (!Array.isArray(masterRegistrationRequests)) masterRegistrationRequests = [];
             const normalizedUsers = Array.isArray(allUsers) ? allUsers : [];
             
             masterUsers = normalizedUsers;
@@ -178,6 +184,7 @@ let editModal;
             filterInventory(); // Re-apply active category/search filters to fresh data
             syncMonitor();
             renderUsersList();
+            renderRegistrationRequests();
             renderBorrowedBooksList();
             renderBookRegistrationStats();
             await renderAdminHistory();
@@ -370,6 +377,7 @@ let editModal;
         const linkMap = {
             'console': { id: 'linkConsole', title: 'Command Dashboard' },
             'users': { id: 'linkUsers', title: 'User Directory' },
+            'registrationRequests': { id: 'linkRegistrationRequests', title: 'Registration Request List' },
             'inventory': { id: 'linkInventory', title: 'Inventory Manager' },
             'leaderboard': { id: 'linkLeaderboard', title: 'Monthly Leaderboards' },
             'dateRestrictions': { id: 'linkDateRestrictions', title: 'Date Restriction Calendar' }
@@ -407,6 +415,116 @@ let editModal;
                 <td><span class="status-pill badge-available">Active</span></td>
                 <td class="text-end pe-4"><i class='fas fa-eye text-muted'></i></td>
             </tr>`).join('') || '<tr><td colspan="6" class="text-center py-5 text-muted">No records found.</td></tr>';
+    }
+
+    function setQuickRegisterRole(role) {
+        currentRole = role === 'admin' ? 'admin' : 'student';
+        document.getElementById('btnStudent')?.classList.toggle('active', currentRole === 'student');
+        document.getElementById('btnAdmin')?.classList.toggle('active', currentRole === 'admin');
+    }
+
+    async function submitQuickRegister() {
+        if (!isStaff) return alert('System Locked');
+
+        const name = document.getElementById('quickRegName')?.value.trim();
+        const school_id = document.getElementById('quickRegID')?.value.trim();
+        const password = document.getElementById('quickRegPass')?.value;
+        const photo = document.getElementById('quickRegPhoto')?.files?.[0];
+
+        if (!name || !school_id || !password) {
+            alert('Please complete name, ID, and password.');
+            return;
+        }
+
+        const form = new FormData();
+        form.append('name', name);
+        form.append('school_id', school_id);
+        form.append('password', password);
+        if (photo) form.append('photo', photo);
+
+        const endpoint = currentRole === 'admin' ? '/api/register_librarian' : '/api/register_student';
+        try {
+            const res = await fetch(endpoint, { method: 'POST', body: form });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                alert(data.message || 'Registration failed.');
+                return;
+            }
+            alert(`Successfully created ${currentRole} account.`);
+            ['quickRegName', 'quickRegID', 'quickRegPass', 'quickRegPhoto'].forEach((id) => {
+                const input = document.getElementById(id);
+                if (input) input.value = '';
+            });
+            loadData();
+        } catch (error) {
+            console.error(error);
+            alert('Unable to submit quick registration right now.');
+        }
+    }
+
+    function renderRegistrationRequests() {
+        const body = document.getElementById('registrationRequestsBody');
+        if (!body) return;
+
+        const requests = (masterRegistrationRequests || [])
+            .filter((row) => String(row.status || 'pending').toLowerCase() === 'pending')
+            .reverse();
+
+        body.innerHTML = requests.map((row) => `
+            <tr>
+                <td class="ps-4"><code class="fw-bold text-dark">${row.request_id || '-'}</code></td>
+                <td><img src="/Profile/${row.photo || 'default.png'}" class="user-row-img shadow-sm"></td>
+                <td class="fw-bold">${row.name || '-'}</td>
+                <td><code class="fw-bold text-dark">${row.school_id || '-'}</code></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openRegistrationRequest('${row.request_id}')">Open</button>
+                </td>
+            </tr>
+        `).join('') || '<tr><td colspan="5" class="text-center py-4 text-muted">No pending registration requests.</td></tr>';
+    }
+
+    function openRegistrationRequest(requestID) {
+        const row = (masterRegistrationRequests || []).find((req) => req.request_id === requestID);
+        if (!row) return alert('Request not found.');
+
+        document.getElementById('registrationRequestModalBody').innerHTML = `
+            <div class="small">
+                <div class="text-center mb-3">
+                    <img src="/Profile/${row.photo || 'default.png'}" class="rounded-circle shadow-sm" style="width:90px;height:90px;object-fit:cover;" alt="profile">
+                </div>
+                <div><span class="fw-bold text-dark">Request ID:</span> ${row.request_id || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Profile Name:</span> ${row.name || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">ID:</span> ${row.school_id || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Requested Role:</span> ${(row.role || 'student').toUpperCase()}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Created:</span> ${row.created_at || '-'}</div>
+            </div>
+            <div class="d-flex gap-2 mt-4">
+                <button class="btn btn-success w-100" onclick="reviewRegistrationRequest('${row.request_id}', 'approve')">Approve</button>
+                <button class="btn btn-danger w-100" onclick="reviewRegistrationRequest('${row.request_id}', 'reject')">Reject</button>
+            </div>
+        `;
+        registrationRequestModal.show();
+    }
+
+    async function reviewRegistrationRequest(requestID, decision) {
+        if (!isStaff) return alert('System Locked');
+        try {
+            const res = await apiFetch(`/api/admin/registration-requests/${requestID}/decision`, {
+                method: 'POST',
+                body: JSON.stringify({ decision })
+            }, false);
+            const data = await res.json();
+            if (!data.success) {
+                alert(data.message || 'Unable to update request.');
+                return;
+            }
+            registrationRequestModal.hide();
+            alert(`Request ${requestID} ${decision}d.`);
+            loadData();
+        } catch (error) {
+            console.error(error);
+            alert('Unable to process request right now.');
+        }
     }
 
     function renderInventory(data) {
