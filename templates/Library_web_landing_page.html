@@ -35,9 +35,9 @@
       <div class="collapse navbar-collapse" id="landingNav">
         <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
           <li class="nav-item"><a class="nav-link" href="#home">Home</a></li>
-          <li class="nav-item"><a class="nav-link construction-link" href="#about">About</a></li>
-          <li class="nav-item"><a class="nav-link construction-link" href="#news">News</a></li>
-          <li class="nav-item"><a class="nav-link construction-link" href="#catalog">Catalog</a></li>
+          <li class="nav-item"><a class="nav-link" href="#about">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="#news">News</a></li>
+          <li class="nav-item"><a class="nav-link" href="#catalog">Catalog</a></li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Log in</a>
             <ul class="dropdown-menu dropdown-menu-end">
@@ -52,24 +52,42 @@
 
   <main class="landing-main">
     <section id="home" class="section-card hero-section">
-      <h2>Home</h2>
-      <p class="lead mb-2">Word of the day / highlights area</p>
-      <p class="placeholder-text">This section is reserved and will be made first under website construction.</p>
+      <div class="section-head-row">
+        <h2>Home</h2>
+      </div>
+      <div class="landing-slider-wrap">
+        <button class="slider-nav" id="homePrevBtn" type="button">&lt;</button>
+        <article id="homePostCard" class="landing-post-card"></article>
+        <button class="slider-nav" id="homeNextBtn" type="button">&gt;</button>
+      </div>
     </section>
 
     <section id="about" class="section-card">
       <h3>About</h3>
-      <p class="placeholder-text">To be made first under website construction.</p>
+      <p class="placeholder-text">TO BE WRITEN.</p>
     </section>
 
     <section id="news" class="section-card">
-      <h3>News</h3>
-      <p class="placeholder-text">To be made first under website construction.</p>
+      <div class="section-head-row">
+        <h3>News</h3>
+      </div>
+      <div class="landing-slider-wrap">
+        <button class="slider-nav" id="newsPrevBtn" type="button">&lt;</button>
+        <article id="newsPostCard" class="landing-post-card"></article>
+        <button class="slider-nav" id="newsNextBtn" type="button">&gt;</button>
+      </div>
     </section>
 
     <section id="catalog" class="section-card">
       <h3>Catalog</h3>
-      <p class="placeholder-text">To be made first under website construction.</p>
+      <div class="table-responsive">
+        <table class="table table-sm table-dark table-striped align-middle mb-0" id="catalogLeaderboardTable">
+          <thead>
+            <tr><th>#</th><th>Borrower</th><th>ID</th><th>Total Borrowed</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </section>
   </main>
 

@@ -32,13 +32,19 @@ logger = logging.getLogger("LBAS_Command_Center")
 
 PROFILE_FOLDER = "Profile"
 CREATORS_PROFILE_DB = "creators_profiles.json"
+LANDING_UPLOAD_FOLDER = "LandingUploads"
 app.config["UPLOAD_FOLDER"] = PROFILE_FOLDER
+app.config["LANDING_UPLOAD_FOLDER"] = LANDING_UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
 app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
 
 if not os.path.exists(PROFILE_FOLDER):
     os.makedirs(PROFILE_FOLDER)
     logger.info(f"SYSTEM INIT: Created secure profile storage at ./{PROFILE_FOLDER}")
+
+if not os.path.exists(LANDING_UPLOAD_FOLDER):
+    os.makedirs(LANDING_UPLOAD_FOLDER)
+    logger.info(f"SYSTEM INIT: Created landing uploads storage at ./{LANDING_UPLOAD_FOLDER}")
 
 # Database Map: Full restoration of all required DBs
 DB_FILES = {
@@ -54,6 +60,8 @@ DB_FILES = {
     "admin_approval_record": "Admin_approval_record.json",
     "registration_requests": "registration_requests.json",
     "log_rec": "log_rec.json",
+    "home_posts": "home_posts.json",
+    "news_posts": "news_posts.json",
 }
 
 ACTIVE_SESSIONS = {}
@@ -1896,6 +1904,122 @@ def api_leaderboard_profile(school_id):
         }
 
     return jsonify({"success": True, "profile": match})
+
+
+def _normalize_landing_posts(raw_posts, section):
+    if not isinstance(raw_posts, list):
+        return []
+
+    normalized = []
+    for post in raw_posts:
+        if not isinstance(post, dict):
+            continue
+        normalized.append(
+            {
+                "post_id": str(post.get("post_id", "")).strip(),
+                "text": str(post.get("text", "")).strip(),
+                "image": str(post.get("image", "")).strip(),
+                "document": str(post.get("document", "")).strip(),
+                "created_at": str(post.get("created_at", "")).strip(),
+                "section": section,
+            }
+        )
+    return normalized
+
+
+def _save_landing_file(uploaded_file, prefix):
+    if not (uploaded_file and getattr(uploaded_file, "filename", "")):
+        return ""
+    original_name = secure_filename(uploaded_file.filename)
+    if not original_name:
+        return ""
+    _, ext = os.path.splitext(original_name)
+    ext = (ext or "").lower()[:10]
+    final_name = f"{prefix}_{uuid.uuid4().hex[:10]}{ext}"
+    uploaded_file.save(os.path.join(app.config["LANDING_UPLOAD_FOLDER"], final_name))
+    return final_name
+
+
+@app.route("/api/landing/posts")
+def api_get_landing_posts():
+    home_posts = _normalize_landing_posts(get_db("home_posts"), "home")
+    news_posts = _normalize_landing_posts(get_db("news_posts"), "news")
+    return jsonify({"home": home_posts, "news": news_posts})
+
+
+@app.route("/api/admin/landing/<section>", methods=["GET", "POST"])
+def api_admin_landing_posts(section):
+    if not require_admin_session():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    target_section = str(section or "").strip().lower()
+    if target_section not in {"home", "news"}:
+        return jsonify({"success": False, "message": "Invalid section"}), 400
+
+    db_key = "home_posts" if target_section == "home" else "news_posts"
+    posts = _normalize_landing_posts(get_db(db_key), target_section)
+
+    if request.method == "GET":
+        return jsonify({"success": True, "posts": posts})
+
+    post_id = str(request.form.get("post_id", "")).strip()
+    text = str(request.form.get("text", "")).strip()
+    image_name = _save_landing_file(request.files.get("image"), target_section)
+    document_name = _save_landing_file(request.files.get("document"), target_section)
+    if not post_id:
+        return jsonify({"success": False, "message": "Post ID is required."}), 400
+    if not text and not image_name and not document_name:
+        return jsonify({"success": False, "message": "Add text, image, or document first."}), 400
+
+    duplicate = next((p for p in posts if p.get("post_id", "").lower() == post_id.lower()), None)
+    if duplicate:
+        return jsonify({"success": False, "message": "Post ID already exists."}), 400
+
+    posts.append(
+        {
+            "post_id": post_id,
+            "text": text,
+            "image": image_name,
+            "document": document_name,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "section": target_section,
+        }
+    )
+    save_db(db_key, posts)
+    return jsonify({"success": True, "posts": posts})
+
+
+@app.route("/api/admin/landing/<section>/<post_id>", methods=["PUT", "DELETE"])
+def api_admin_landing_post_actions(section, post_id):
+    if not require_admin_session():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    target_section = str(section or "").strip().lower()
+    if target_section not in {"home", "news"}:
+        return jsonify({"success": False, "message": "Invalid section"}), 400
+
+    db_key = "home_posts" if target_section == "home" else "news_posts"
+    posts = _normalize_landing_posts(get_db(db_key), target_section)
+    idx = next(
+        (i for i, p in enumerate(posts) if p.get("post_id", "").strip().lower() == str(post_id).strip().lower()),
+        -1,
+    )
+    if idx < 0:
+        return jsonify({"success": False, "message": "Post not found"}), 404
+
+    if request.method == "DELETE":
+        posts.pop(idx)
+        save_db(db_key, posts)
+        return jsonify({"success": True, "posts": posts})
+
+    payload = request.get_json(silent=True) or {}
+    text = str(payload.get("text", "")).strip()
+    posts[idx]["text"] = text
+    save_db(db_key, posts)
+    return jsonify({"success": True, "posts": posts})
+
+
+@app.route("/LandingUploads/<path:filename>")
+def serve_landing_upload(filename):
+    return send_from_directory(app.config["LANDING_UPLOAD_FOLDER"], filename)
 
 
 @app.route("/Profile/<path:filename>")
