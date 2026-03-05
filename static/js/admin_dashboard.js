@@ -6,6 +6,8 @@ let currentRole = 'student',
         masterCategories = [],
         masterApprovalRecords = [],
         masterRegistrationRequests = [],
+        masterHomePosts = [],
+        masterNewsPosts = [],
         adminHistory = JSON.parse(localStorage.getItem('adminHistory') || '[]'), 
         isStaff = false, 
         activeFilterCat = 'All',
@@ -186,6 +188,7 @@ let editModal;
             renderUsersList();
             renderRegistrationRequestBadge();
             renderRegistrationRequests();
+            await loadLandingPostsForAdmin();
             renderBorrowedBooksList();
             renderBookRegistrationStats();
             await renderAdminHistory();
@@ -380,6 +383,8 @@ let editModal;
             'users': { id: 'linkUsers', title: 'User Directory' },
             'registrationRequests': { id: 'linkRegistrationRequests', title: 'Registration Request List' },
             'inventory': { id: 'linkInventory', title: 'Inventory Manager' },
+            'postHome': { id: 'linkPostHome', title: 'Post for Home' },
+            'postNews': { id: 'linkPostNews', title: 'Post News' },
             'leaderboard': { id: 'linkLeaderboard', title: 'Monthly Leaderboards' },
             'dateRestrictions': { id: 'linkDateRestrictions', title: 'Date Restriction Calendar' }
         };
@@ -398,6 +403,114 @@ let editModal;
         }
         if(view === 'leaderboard') loadAdminLeaderboards();
         if(view === 'dateRestrictions') loadDateRestrictions();
+        if(view === 'postHome') renderAdminLandingPosts('home');
+        if(view === 'postNews') renderAdminLandingPosts('news');
+    }
+
+
+    async function loadLandingPostsForAdmin() {
+        try {
+            const [homeRes, newsRes] = await Promise.all([
+                apiFetch('/api/admin/landing/home'),
+                apiFetch('/api/admin/landing/news')
+            ]);
+            const homeData = await homeRes.json();
+            const newsData = await newsRes.json();
+            masterHomePosts = Array.isArray(homeData.posts) ? homeData.posts : [];
+            masterNewsPosts = Array.isArray(newsData.posts) ? newsData.posts : [];
+            renderAdminLandingPosts('home');
+            renderAdminLandingPosts('news');
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    function renderAdminLandingPosts(section) {
+        const isHome = section === 'home';
+        const posts = isHome ? masterHomePosts : masterNewsPosts;
+        const root = document.getElementById(isHome ? 'homeAdminPostGrid' : 'newsAdminPostGrid');
+        if (!root) return;
+        root.innerHTML = posts.map((post) => `
+            <article class="admin-post-card-item">
+                <span class="post-id-chip">${post.post_id || ''}</span>
+                <div class="post-actions-top-right">
+                    <button class="btn btn-sm btn-outline-warning" onclick="editLandingPost('${section}', '${String(post.post_id).replace(/'/g, "\'")}')">edit</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteLandingPost('${section}', '${String(post.post_id).replace(/'/g, "\'")}')">x</button>
+                </div>
+                ${post.image ? `<img src="/LandingUploads/${encodeURIComponent(post.image)}" class="admin-post-thumb">` : ''}
+                ${post.document ? `<a class="btn btn-sm btn-outline-primary mt-2" href="/LandingUploads/${encodeURIComponent(post.document)}" target="_blank">Document</a>` : ''}
+                <p class="small mb-0 mt-2">${post.text || ''}</p>
+            </article>
+        `).join('') || '<p class="text-muted">No posts yet.</p>';
+    }
+
+    async function submitLandingPost(section) {
+        const isHome = section === 'home';
+        const idInput = document.getElementById(isHome ? 'homePostId' : 'newsPostId');
+        const textInput = document.getElementById(isHome ? 'homePostText' : 'newsPostText');
+        const imageInput = document.getElementById('homePostImage');
+        const documentInput = document.getElementById('newsPostDocument');
+
+        const form = new FormData();
+        form.append('post_id', idInput.value.trim());
+        form.append('text', textInput.value.trim());
+        if (isHome && imageInput?.files?.[0]) form.append('image', imageInput.files[0]);
+        if (!isHome && documentInput?.files?.[0]) {
+            const file = documentInput.files[0];
+            if ((file.type || '').startsWith('image/')) form.append('image', file);
+            else form.append('document', file);
+        }
+
+        try {
+            const res = await fetch(`/api/admin/landing/${section}`, {
+                method: 'POST',
+                headers: { 'Authorization': getAuthToken() },
+                body: form
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) return alert(data.message || 'Unable to post.');
+            if (isHome) { masterHomePosts = data.posts || []; imageInput.value=''; }
+            else { masterNewsPosts = data.posts || []; documentInput.value=''; }
+            idInput.value = '';
+            textInput.value = '';
+            renderAdminLandingPosts(section);
+        } catch (error) {
+            console.error(error);
+            alert('Unable to post.');
+        }
+    }
+
+    async function deleteLandingPost(section, postId) {
+        if (!confirm(`Delete post ${postId}?`)) return;
+        try {
+            const res = await apiFetch(`/api/admin/landing/${section}/${encodeURIComponent(postId)}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (section === 'home') masterHomePosts = data.posts || [];
+            else masterNewsPosts = data.posts || [];
+            renderAdminLandingPosts(section);
+        } catch (error) {
+            console.error(error);
+            alert('Delete failed.');
+        }
+    }
+
+    async function editLandingPost(section, postId) {
+        const existing = (section === 'home' ? masterHomePosts : masterNewsPosts).find((item) => String(item.post_id) === String(postId));
+        const updated = prompt('Edit post text:', existing?.text || '');
+        if (updated === null) return;
+        try {
+            const res = await apiFetch(`/api/admin/landing/${section}/${encodeURIComponent(postId)}`, {
+                method: 'PUT',
+                body: JSON.stringify({ text: updated })
+            });
+            const data = await res.json();
+            if (section === 'home') masterHomePosts = data.posts || [];
+            else masterNewsPosts = data.posts || [];
+            renderAdminLandingPosts(section);
+        } catch (error) {
+            console.error(error);
+            alert('Update failed.');
+        }
     }
 
     function renderUsersList() {

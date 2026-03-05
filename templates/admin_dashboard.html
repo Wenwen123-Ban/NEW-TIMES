@@ -88,6 +88,12 @@
         <a class="nav-link text-white-50" id="linkInventory" onclick="switchView('inventory')">
             <span><i class="fas fa-book-reader me-3"></i>Inventory</span>
         </a>
+        <a class="nav-link text-white-50" id="linkPostHome" onclick="switchView('postHome')">
+            <span><i class="fas fa-house-circle-check me-3"></i>Post for Home</span>
+        </a>
+        <a class="nav-link text-white-50" id="linkPostNews" onclick="switchView('postNews')">
+            <span><i class="fas fa-newspaper me-3"></i>Post News</span>
+        </a>
         <a class="nav-link text-white-50" id="linkLeaderboard" style="display:none;" onclick="switchView('leaderboard')">
             <span><i class="fas fa-trophy me-3"></i>Leaderboard</span>
         </a>
@@ -318,6 +324,60 @@
                     </table>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div id="postHomeView" class="view-section">
+        <div class="card glass-card p-4 mb-4">
+            <h5 class="fw-bold mb-3">Control Post Card</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="small fw-bold">Post ID</label>
+                    <input id="homePostId" class="form-control" placeholder="Post ID">
+                </div>
+                <div class="col-md-4">
+                    <label class="small fw-bold">Upload image:</label>
+                    <input id="homePostImage" type="file" class="form-control" accept="image/*">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="submitLandingPost('home')">Post button</button>
+                </div>
+                <div class="col-12">
+                    <label class="small fw-bold">Write Something:</label>
+                    <textarea id="homePostText" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="card glass-card p-4">
+            <h5 class="fw-bold mb-3">Post Control card</h5>
+            <div id="homeAdminPostGrid" class="admin-post-grid"></div>
+        </div>
+    </div>
+
+    <div id="postNewsView" class="view-section">
+        <div class="card glass-card p-4 mb-4">
+            <h5 class="fw-bold mb-3">Control Post Card</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="small fw-bold">Post ID</label>
+                    <input id="newsPostId" class="form-control" placeholder="Post ID">
+                </div>
+                <div class="col-md-4">
+                    <label class="small fw-bold">Upload Document:</label>
+                    <input id="newsPostDocument" type="file" class="form-control" accept=".pdf,.doc,.docx,.txt,image/*">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="submitLandingPost('news')">Post button</button>
+                </div>
+                <div class="col-12">
+                    <label class="small fw-bold">Write details:</label>
+                    <textarea id="newsPostText" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="card glass-card p-4">
+            <h5 class="fw-bold mb-3">Post Control card</h5>
+            <div id="newsAdminPostGrid" class="admin-post-grid"></div>
         </div>
     </div>
 
