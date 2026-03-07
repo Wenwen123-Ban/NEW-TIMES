@@ -7,6 +7,156 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/library_web_landing_page.css') }}" />
+  <style>
+    #aboutModalBackdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 997;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #aboutModal {
+      width: 100%;
+      max-width: 520px;
+      opacity: 0;
+      transform: translateY(40px);
+    }
+
+    .about-modal-card {
+      position: relative;
+      background: var(--white, #fff);
+      border-radius: 20px;
+      padding: 36px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
+      text-align: center;
+    }
+
+    #aboutModalBackdrop.modal-visible {
+      display: flex;
+      pointer-events: auto;
+    }
+
+    #aboutModalBackdrop.modal-opening {
+      animation: about-backdrop-in 0.28s ease forwards;
+    }
+
+    #aboutModalBackdrop.modal-opening #aboutModal {
+      animation: about-card-in 0.28s ease forwards;
+    }
+
+    #aboutModalBackdrop.modal-closing {
+      animation: about-backdrop-out 0.2s ease forwards;
+    }
+
+    #aboutModalBackdrop.modal-closing #aboutModal {
+      animation: about-card-out 0.2s ease forwards;
+    }
+
+    .about-close-x {
+      border: 0;
+      background: transparent;
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      font-size: 1.5rem;
+      color: var(--navy, #0b1f3b);
+      line-height: 1;
+    }
+
+    .about-modal-title {
+      margin-top: 1rem;
+      font-weight: 700;
+      font-family: 'Playfair Display', Georgia, serif;
+      color: var(--navy, #0b1f3b);
+    }
+
+    .about-created-by {
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      color: #6c757d;
+      margin-bottom: 0.5rem;
+    }
+
+    .about-creator-pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 0.4rem 1rem;
+      background: rgba(21, 101, 192, 0.12);
+      color: var(--blue, #1565c0);
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    #aboutTriggerBtn {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 998;
+      width: 52px;
+      height: 52px;
+      border: none;
+      border-radius: 50%;
+      background: var(--blue, #1565c0);
+      color: var(--white, #fff);
+      box-shadow: 0 4px 16px rgba(21, 101, 192, 0.35);
+      font-size: 1.1rem;
+      transition: transform 0.2s ease;
+      animation: pulse-once 1s ease 3;
+      animation-fill-mode: forwards;
+    }
+
+    #aboutTriggerBtn:hover {
+      transform: scale(1.1);
+    }
+
+    #aboutTriggerBtn.footer-overlap {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @keyframes about-card-in {
+      from { opacity: 0; transform: translateY(40px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes about-card-out {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(40px); }
+    }
+
+    @keyframes about-backdrop-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes about-backdrop-out {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    @keyframes pulse-once {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    @media (max-width: 767.98px) {
+      #aboutModal {
+        max-width: 90vw;
+      }
+
+      .about-modal-card {
+        padding: 24px;
+      }
+    }
+  </style>
 </head>
 <body>
   <header class="main-header">
@@ -30,7 +180,7 @@
       <div class="collapse navbar-collapse" id="landingNav">
         <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
           <li class="nav-item"><a class="nav-link" href="#home">Home</a></li>
-          <li class="nav-item"><a class="nav-link" href="#about">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" onclick="openAboutModal(); return false;">About</a></li>
           <li class="nav-item"><a class="nav-link" href="#news">News</a></li>
           <li class="nav-item"><a class="nav-link" href="#catalog">Catalog</a></li>
           <li class="nav-item dropdown">
@@ -49,11 +199,6 @@
     <section id="home" class="section-card hero-section">
       <div class="section-head-row"><h2>Home</h2></div>
       <div id="homeCardsGrid" class="home-cards-grid"></div>
-    </section>
-
-    <section id="about" class="section-card">
-      <h3>About</h3>
-      <p class="placeholder-text">TO BE WRITEN.</p>
     </section>
 
     <section id="news" class="section-card">
@@ -81,6 +226,10 @@
     </div>
   </footer>
 
+  <button id="aboutTriggerBtn" onclick="openAboutModal()" title="About LBAS" aria-label="About LBAS">
+    <i class="fas fa-info"></i>
+  </button>
+
   <div id="constructionToast" class="construction-toast" role="status" aria-live="polite">To be made first under website construction.</div>
 
   <div id="newsReadModal" class="news-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
@@ -98,7 +247,80 @@
     <img id="lightboxImage" class="lightbox-image" alt="Expanded image" />
   </div>
 
+  <div id="aboutModalBackdrop" role="dialog" aria-modal="true" aria-hidden="true" onclick="if (event.target === this) closeAboutModal();">
+    <div id="aboutModal">
+      <article class="about-modal-card" onclick="event.stopPropagation();">
+        <button class="about-close-x" type="button" onclick="closeAboutModal()" aria-label="Close about modal">×</button>
+        <div class="nav-logo-box mx-auto"><span>LBAS</span></div>
+        <h3 class="about-modal-title">About LBAS</h3>
+        <p class="text-muted small mb-3">Library Borrowing and Assistance System</p>
+        <hr>
+        <p class="mb-3">LBAS is a school library management system built to help students browse, reserve, and borrow books — whether on campus via school WiFi or from home via the internet. Designed to work fully offline on LAN and online via Cloudflare Tunnel.</p>
+        <div class="about-created-by">Created by</div>
+        <div class="about-creator-pill">LBAS Research Group</div>
+        <p class="text-muted small mb-4">System Version 7.2 Beta</p>
+        <button class="btn w-100 text-white" style="background: var(--blue, #1565c0);" type="button" onclick="closeAboutModal()">Got it!</button>
+      </article>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/library_web_landing_page.js') }}"></script>
+  <script>
+    let aboutModalEscHandler;
+
+    function openAboutModal() {
+      const backdrop = document.getElementById('aboutModalBackdrop');
+      if (!backdrop) return;
+
+      backdrop.classList.remove('modal-closing');
+      backdrop.classList.add('modal-visible', 'modal-opening');
+      backdrop.setAttribute('aria-hidden', 'false');
+
+      if (!aboutModalEscHandler) {
+        aboutModalEscHandler = function (event) {
+          if (event.key === 'Escape') {
+            closeAboutModal();
+          }
+        };
+      }
+
+      document.addEventListener('keydown', aboutModalEscHandler);
+    }
+
+    function closeAboutModal() {
+      const backdrop = document.getElementById('aboutModalBackdrop');
+      if (!backdrop || !backdrop.classList.contains('modal-visible')) return;
+
+      backdrop.classList.remove('modal-opening');
+      backdrop.classList.add('modal-closing');
+
+      setTimeout(() => {
+        backdrop.classList.remove('modal-visible', 'modal-closing');
+        backdrop.setAttribute('aria-hidden', 'true');
+      }, 200);
+
+      if (aboutModalEscHandler) {
+        document.removeEventListener('keydown', aboutModalEscHandler);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const footer = document.querySelector('footer');
+      const trigger = document.getElementById('aboutTriggerBtn');
+      if (!footer || !trigger || typeof IntersectionObserver === 'undefined') return;
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            trigger.classList.toggle('footer-overlap', entry.isIntersecting);
+          });
+        },
+        { threshold: 0.1 }
+      );
+
+      observer.observe(footer);
+    });
+  </script>
 </body>
 </html>
