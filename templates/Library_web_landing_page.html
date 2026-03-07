@@ -16,7 +16,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 1rem;
+      padding: 20px;
       opacity: 0;
       pointer-events: none;
     }
@@ -32,7 +32,8 @@
       position: relative;
       background: var(--white, #fff);
       border-radius: 20px;
-      padding: 36px;
+      padding: 40px 36px 36px;
+      overflow: visible;
       box-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
       text-align: center;
     }
@@ -63,10 +64,18 @@
       background: transparent;
       position: absolute;
       top: 14px;
-      right: 14px;
+      right: 18px;
       font-size: 1.5rem;
       color: var(--navy, #0b1f3b);
       line-height: 1;
+    }
+
+    .about-body-text {
+      margin: 16px 0;
+      font-size: 0.92rem;
+      color: #444;
+      line-height: 1.7;
+      text-align: center;
     }
 
     .about-modal-title {
@@ -153,7 +162,13 @@
       }
 
       .about-modal-card {
-        padding: 24px;
+        padding: 40px 24px 24px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      #aboutModalBackdrop {
+        padding: 20px;
       }
     }
   </style>
@@ -255,7 +270,7 @@
         <h3 class="about-modal-title">About LBAS</h3>
         <p class="text-muted small mb-3">Library Borrowing and Assistance System</p>
         <hr>
-        <p class="mb-3">LBAS is a school library management system built to help students browse, reserve, and borrow books — whether on campus via school WiFi or from home via the internet. Designed to work fully offline on LAN and online via Cloudflare Tunnel.</p>
+        <p class="about-body-text">LBAS is a school library management system built to help students browse, reserve, and borrow books — whether on campus via school WiFi or from home via the internet. Designed to work fully offline on LAN and online via Cloudflare Tunnel.</p>
         <div class="about-created-by">Created by</div>
         <div class="about-creator-pill">LBAS Research Group</div>
         <p class="text-muted small mb-4">System Version 7.2 Beta</p>
