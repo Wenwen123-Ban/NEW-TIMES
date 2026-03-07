@@ -6,7 +6,7 @@ let currentRole = 'student',
         masterCategories = [],
         masterApprovalRecords = [],
         masterRegistrationRequests = [],
-        masterHomePosts = [],
+        masterHomeCards = [],
         masterNewsPosts = [],
         adminHistory = JSON.parse(localStorage.getItem('adminHistory') || '[]'), 
         isStaff = false, 
@@ -115,6 +115,13 @@ let editModal;
 
         mountAdminDropdown();
         bindDashboardDelegatedEvents();
+        document.getElementById('newsPostImage')?.addEventListener('change', syncNewsUploadPreview);
+        document.getElementById('newsUploadPreview')?.addEventListener('click', () => {
+            const src = document.getElementById('newsUploadPreview')?.getAttribute('src');
+            if (!src) return;
+            document.getElementById('newsImageModalContent').src = src;
+            toggleModal('newsImageModal', true);
+        });
         showAdminIntroStep('welcome');
         if(localStorage.getItem('isStaffAuth') === 'true') {
             executeUnlock(localStorage.getItem('adminName'), localStorage.getItem('adminPhoto'), localStorage.getItem('adminSchoolId'), localStorage.getItem('adminToken'));
@@ -188,7 +195,7 @@ let editModal;
             renderUsersList();
             renderRegistrationRequestBadge();
             renderRegistrationRequests();
-            await loadLandingPostsForAdmin();
+            await loadNewsPosts();
             renderBorrowedBooksList();
             renderBookRegistrationStats();
             await renderAdminHistory();
@@ -403,113 +410,188 @@ let editModal;
         }
         if(view === 'leaderboard') loadAdminLeaderboards();
         if(view === 'dateRestrictions') loadDateRestrictions();
-        if(view === 'postHome') renderAdminLandingPosts('home');
-        if(view === 'postNews') renderAdminLandingPosts('news');
+        if(view === 'postHome') loadHomeCardsEditor();
+        if(view === 'postNews') { renderNewsPostsTable(); syncNewsUploadPreview(); }
     }
 
 
-    async function loadLandingPostsForAdmin() {
+    function toggleModal(id, show) {
+        const node = document.getElementById(id);
+        if (!node) return;
+        node.classList.toggle('show', !!show);
+        node.setAttribute('aria-hidden', show ? 'false' : 'true');
+    }
+
+    async function loadHomeCardsEditor() {
         try {
-            const [homeRes, newsRes] = await Promise.all([
-                apiFetch('/api/admin/landing/home'),
-                apiFetch('/api/admin/landing/news')
-            ]);
-            const homeData = await homeRes.json();
-            const newsData = await newsRes.json();
-            masterHomePosts = Array.isArray(homeData.posts) ? homeData.posts : [];
-            masterNewsPosts = Array.isArray(newsData.posts) ? newsData.posts : [];
-            renderAdminLandingPosts('home');
-            renderAdminLandingPosts('news');
+            const res = await apiFetch('/api/home_cards', { method: 'GET' }, false);
+            const cards = await res.json();
+            masterHomeCards = Array.isArray(cards) ? cards : [];
+            for (let i = 1; i <= 4; i++) {
+                const card = masterHomeCards.find((row) => Number(row.id) === i) || {};
+                document.getElementById(`homeCardTitle${i}`).value = card.title || '';
+                document.getElementById(`homeCardBody${i}`).value = card.body || '';
+            }
+            const feedback = document.getElementById('homeCardFeedback');
+            if (feedback) feedback.innerHTML = '';
+        } catch (error) {
+            console.error(error);
+            const feedback = document.getElementById('homeCardFeedback');
+            if (feedback) feedback.innerHTML = '<span class="text-danger">Unable to load home cards.</span>';
+        }
+    }
+
+    async function saveHomeCards() {
+        const cards = [];
+        for (let i = 1; i <= 4; i++) {
+            cards.push({
+                id: i,
+                title: document.getElementById(`homeCardTitle${i}`)?.value.trim() || '',
+                body: document.getElementById(`homeCardBody${i}`)?.value.trim() || ''
+            });
+        }
+
+        try {
+            const res = await apiFetch('/api/home_cards', {
+                method: 'POST',
+                body: JSON.stringify(cards)
+            });
+            const data = await res.json();
+            masterHomeCards = Array.isArray(data.cards) ? data.cards : cards;
+            const feedback = document.getElementById('homeCardFeedback');
+            if (feedback) feedback.innerHTML = '<span class="text-success">Home cards updated successfully.</span>';
+        } catch (error) {
+            console.error(error);
+            const feedback = document.getElementById('homeCardFeedback');
+            if (feedback) feedback.innerHTML = '<span class="text-danger">Save failed. Please try again.</span>';
+        }
+    }
+
+    function syncNewsUploadPreview() {
+        const input = document.getElementById('newsPostImage');
+        const preview = document.getElementById('newsUploadPreview');
+        const pdfWrap = document.getElementById('newsUploadPdf');
+        const pdfName = document.getElementById('newsUploadPdfName');
+        const placeholder = document.querySelector('#newsUploadDropzone .upload-placeholder-text');
+        const file = input?.files?.[0];
+
+        if (!file) {
+            if (preview) { preview.style.display = 'none'; preview.removeAttribute('src'); }
+            if (pdfWrap) pdfWrap.style.display = 'none';
+            if (placeholder) placeholder.style.display = 'block';
+            return;
+        }
+
+        const isPdf = (file.type || '').includes('pdf') || /\.pdf$/i.test(file.name || '');
+        if (isPdf) {
+            if (preview) { preview.style.display = 'none'; preview.removeAttribute('src'); }
+            if (pdfWrap) pdfWrap.style.display = 'flex';
+            if (pdfName) pdfName.textContent = file.name;
+            if (placeholder) placeholder.style.display = 'none';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            if (preview) {
+                preview.src = String(reader.result || '');
+                preview.style.display = 'block';
+            }
+            if (pdfWrap) pdfWrap.style.display = 'none';
+            if (placeholder) placeholder.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async function loadNewsPosts() {
+        try {
+            const res = await apiFetch('/api/news_posts', { method: 'GET' }, false);
+            const data = await res.json();
+            masterNewsPosts = Array.isArray(data) ? data : [];
+            renderNewsPostsTable();
         } catch (error) {
             console.error(error);
         }
     }
 
-    function renderAdminLandingPosts(section) {
-        const isHome = section === 'home';
-        const posts = isHome ? masterHomePosts : masterNewsPosts;
-        const root = document.getElementById(isHome ? 'homeAdminPostGrid' : 'newsAdminPostGrid');
-        if (!root) return;
-        root.innerHTML = posts.map((post) => `
-            <article class="admin-post-card-item">
-                <span class="post-id-chip">${post.post_id || ''}</span>
-                <div class="post-actions-top-right">
-                    <button class="btn btn-sm btn-outline-warning" onclick="editLandingPost('${section}', '${String(post.post_id).replace(/'/g, "\'")}')">edit</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteLandingPost('${section}', '${String(post.post_id).replace(/'/g, "\'")}')">x</button>
-                </div>
-                ${post.image ? `<img src="/LandingUploads/${encodeURIComponent(post.image)}" class="admin-post-thumb">` : ''}
-                ${post.document ? `<a class="btn btn-sm btn-outline-primary mt-2" href="/LandingUploads/${encodeURIComponent(post.document)}" target="_blank">Document</a>` : ''}
-                <p class="small mb-0 mt-2">${post.text || ''}</p>
-            </article>
-        `).join('') || '<p class="text-muted">No posts yet.</p>';
+    function renderNewsPostsTable() {
+        const tbody = document.getElementById('newsPostsListBody');
+        if (!tbody) return;
+
+        tbody.innerHTML = masterNewsPosts.map((post) => {
+            let thumb = '<span class="text-muted small">No file</span>';
+            if (post.image_filename) {
+                if (/\.pdf$/i.test(post.image_filename)) {
+                    thumb = '<i class="fas fa-file-pdf text-danger fs-4"></i>';
+                } else {
+                    thumb = `<img src="/Profile/${encodeURIComponent(post.image_filename)}" class="admin-news-thumb" alt="thumb">`;
+                }
+            }
+
+            return `
+                <tr>
+                    <td>${thumb}</td>
+                    <td class="fw-bold">${post.title || ''}</td>
+                    <td>${post.date || ''}</td>
+                    <td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="deleteNewsPost('${String(post.id).replace(/'/g, "\'")}')">Delete</button></td>
+                </tr>
+            `;
+        }).join('') || '<tr><td colspan="4" class="text-center text-muted py-4">No posts yet.</td></tr>';
     }
 
-    async function submitLandingPost(section) {
-        const isHome = section === 'home';
-        const idInput = document.getElementById(isHome ? 'homePostId' : 'newsPostId');
-        const textInput = document.getElementById(isHome ? 'homePostText' : 'newsPostText');
-        const imageInput = document.getElementById('homePostImage');
-        const documentInput = document.getElementById('newsPostDocument');
+    async function submitNewsPost() {
+        const title = document.getElementById('newsPostTitle')?.value.trim();
+        const summary = document.getElementById('newsPostSummary')?.value.trim();
+        const body = document.getElementById('newsPostBody')?.value.trim();
+        const imageFile = document.getElementById('newsPostImage')?.files?.[0];
+        const feedback = document.getElementById('newsPostFeedback');
 
-        const form = new FormData();
-        form.append('post_id', idInput.value.trim());
-        form.append('text', textInput.value.trim());
-        if (isHome && imageInput?.files?.[0]) form.append('image', imageInput.files[0]);
-        if (!isHome && documentInput?.files?.[0]) {
-            const file = documentInput.files[0];
-            if ((file.type || '').startsWith('image/')) form.append('image', file);
-            else form.append('document', file);
+        if (!title || !summary || !body) {
+            if (feedback) feedback.innerHTML = '<span class="text-danger">Title, summary, and body are required.</span>';
+            return;
         }
 
+        const form = new FormData();
+        form.append('title', title);
+        form.append('summary', summary);
+        form.append('body', body);
+        if (imageFile) form.append('image', imageFile);
+
         try {
-            const res = await fetch(`/api/admin/landing/${section}`, {
+            const res = await fetch('/api/news_posts', {
                 method: 'POST',
                 headers: { 'Authorization': getAuthToken() },
                 body: form
             });
             const data = await res.json();
-            if (!res.ok || !data.success) return alert(data.message || 'Unable to post.');
-            if (isHome) { masterHomePosts = data.posts || []; imageInput.value=''; }
-            else { masterNewsPosts = data.posts || []; documentInput.value=''; }
-            idInput.value = '';
-            textInput.value = '';
-            renderAdminLandingPosts(section);
+            if (!res.ok || !data.success) {
+                if (feedback) feedback.innerHTML = `<span class="text-danger">${data.message || 'Post failed.'}</span>`;
+                return;
+            }
+
+            if (feedback) feedback.innerHTML = '<span class="text-success">Post published.</span>';
+            document.getElementById('newsPostTitle').value = '';
+            document.getElementById('newsPostSummary').value = '';
+            document.getElementById('newsPostBody').value = '';
+            document.getElementById('newsPostImage').value = '';
+            syncNewsUploadPreview();
+            await loadNewsPosts();
         } catch (error) {
             console.error(error);
-            alert('Unable to post.');
+            if (feedback) feedback.innerHTML = '<span class="text-danger">Unable to post news.</span>';
         }
     }
 
-    async function deleteLandingPost(section, postId) {
-        if (!confirm(`Delete post ${postId}?`)) return;
+    async function deleteNewsPost(postId) {
+        if (!confirm('Delete this post?')) return;
         try {
-            const res = await apiFetch(`/api/admin/landing/${section}/${encodeURIComponent(postId)}`, { method: 'DELETE' });
+            const res = await apiFetch(`/api/news_posts/${encodeURIComponent(postId)}`, { method: 'DELETE' });
             const data = await res.json();
-            if (section === 'home') masterHomePosts = data.posts || [];
-            else masterNewsPosts = data.posts || [];
-            renderAdminLandingPosts(section);
+            masterNewsPosts = Array.isArray(data.posts) ? data.posts : [];
+            renderNewsPostsTable();
         } catch (error) {
             console.error(error);
             alert('Delete failed.');
-        }
-    }
-
-    async function editLandingPost(section, postId) {
-        const existing = (section === 'home' ? masterHomePosts : masterNewsPosts).find((item) => String(item.post_id) === String(postId));
-        const updated = prompt('Edit post text:', existing?.text || '');
-        if (updated === null) return;
-        try {
-            const res = await apiFetch(`/api/admin/landing/${section}/${encodeURIComponent(postId)}`, {
-                method: 'PUT',
-                body: JSON.stringify({ text: updated })
-            });
-            const data = await res.json();
-            if (section === 'home') masterHomePosts = data.posts || [];
-            else masterNewsPosts = data.posts || [];
-            renderAdminLandingPosts(section);
-        } catch (error) {
-            console.error(error);
-            alert('Update failed.');
         }
     }
 

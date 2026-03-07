@@ -12,11 +12,7 @@
   <header class="main-header">
     <div class="header-content">
       <div class="logo-section">
-        <img
-          src="https://up.yimg.com/ib/th/id/OIP.3wZU8KYQ9wGoRl3eoloR0QHaHa?pid=Api&rs=1&c=1&qlt=95&w=114&h=114"
-          alt="School Logo"
-          class="school-logo"
-        />
+        <img src="https://up.yimg.com/ib/th/id/OIP.3wZU8KYQ9wGoRl3eoloR0QHaHa?pid=Api&rs=1&c=1&qlt=95&w=114&h=114" alt="School Logo" class="school-logo" />
         <div class="system-title">
           <h1>Library Borrowing and Assistance System</h1>
           <p class="mb-0">Welcome to the official library website</p>
@@ -31,7 +27,6 @@
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNav" aria-controls="landingNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
-
       <div class="collapse navbar-collapse" id="landingNav">
         <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
           <li class="nav-item"><a class="nav-link" href="#home">Home</a></li>
@@ -52,14 +47,8 @@
 
   <main class="landing-main">
     <section id="home" class="section-card hero-section">
-      <div class="section-head-row">
-        <h2>Home</h2>
-      </div>
-      <div class="landing-slider-wrap">
-        <button class="slider-nav" id="homePrevBtn" type="button">&lt;</button>
-        <article id="homePostCard" class="landing-post-card"></article>
-        <button class="slider-nav" id="homeNextBtn" type="button">&gt;</button>
-      </div>
+      <div class="section-head-row"><h2>Home</h2></div>
+      <div id="homeCardsGrid" class="home-cards-grid"></div>
     </section>
 
     <section id="about" class="section-card">
@@ -68,23 +57,17 @@
     </section>
 
     <section id="news" class="section-card">
-      <div class="section-head-row">
-        <h3>News</h3>
-      </div>
-      <div class="landing-slider-wrap">
-        <button class="slider-nav" id="newsPrevBtn" type="button">&lt;</button>
-        <article id="newsPostCard" class="landing-post-card"></article>
-        <button class="slider-nav" id="newsNextBtn" type="button">&gt;</button>
-      </div>
+      <div class="section-head-row"><h3>News</h3></div>
+      <div id="newsDesktopList" class="news-desktop-list"></div>
+      <div id="newsMobileStrip" class="news-mobile-strip"></div>
+      <div id="newsMobileHint" class="news-mobile-hint"><i class="fas fa-arrow-left me-2"></i>Swipe<i class="fas fa-arrow-right ms-2"></i></div>
     </section>
 
     <section id="catalog" class="section-card">
       <h3>Catalog</h3>
       <div class="table-responsive">
         <table class="table table-sm table-dark table-striped align-middle mb-0" id="catalogLeaderboardTable">
-          <thead>
-            <tr><th>#</th><th>Borrower</th><th>ID</th><th>Total Borrowed</th></tr>
-          </thead>
+          <thead><tr><th>#</th><th>Borrower</th><th>ID</th><th>Total Borrowed</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -98,8 +81,21 @@
     </div>
   </footer>
 
-  <div id="constructionToast" class="construction-toast" role="status" aria-live="polite">
-    To be made first under website construction.
+  <div id="constructionToast" class="construction-toast" role="status" aria-live="polite">To be made first under website construction.</div>
+
+  <div id="newsReadModal" class="news-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <button class="news-modal-close" type="button" data-close="newsReadModal">×</button>
+    <article class="news-modal-content">
+      <h2 id="newsModalTitle"></h2>
+      <p id="newsModalMeta" class="news-modal-meta"></p>
+      <img id="newsModalImage" class="news-modal-image" alt="Post image" />
+      <p id="newsModalBody" class="news-modal-body"></p>
+    </article>
+  </div>
+
+  <div id="imageLightboxModal" class="news-modal-overlay image-lightbox" role="dialog" aria-modal="true" aria-hidden="true">
+    <button class="news-modal-close" type="button" data-close="imageLightboxModal">×</button>
+    <img id="lightboxImage" class="lightbox-image" alt="Expanded image" />
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
