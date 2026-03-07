@@ -60,7 +60,7 @@ DB_FILES = {
     "admin_approval_record": "Admin_approval_record.json",
     "registration_requests": "registration_requests.json",
     "log_rec": "log_rec.json",
-    "home_posts": "home_posts.json",
+    "home_cards": "home_cards.json",
     "news_posts": "news_posts.json",
 }
 
@@ -164,6 +164,26 @@ def save_profile_photo(photo, school_id):
     filename = f"{sid}_profile{ext}"
     file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
     photo.save(file_path)
+    return filename
+
+
+def save_post_image(uploaded_file):
+    """Save uploaded landing/news media in ./Profile and return the filename."""
+    if not (uploaded_file and getattr(uploaded_file, "filename", "")):
+        return None
+
+    original_name = secure_filename(uploaded_file.filename)
+    if not original_name:
+        return None
+
+    _, ext = os.path.splitext(original_name)
+    ext = (ext or "").lower()
+    allowed_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
+    if ext not in allowed_ext:
+        return None
+
+    filename = f"news_{uuid.uuid4().hex[:16]}{ext}"
+    uploaded_file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
     return filename
 
 
@@ -276,6 +296,18 @@ def initialize_system():
             }
         )
         save_db("admins", admins)
+
+    # Ensure home cards always has 4 structured slots.
+    raw_cards = get_db("home_cards")
+    normalized_cards = _normalize_home_cards(raw_cards)
+    if raw_cards != normalized_cards:
+        save_db("home_cards", normalized_cards)
+
+    # Ensure news posts use the expected schema list format.
+    raw_news_posts = get_db("news_posts")
+    normalized_news = _normalize_news_posts(raw_news_posts)
+    if raw_news_posts != normalized_news:
+        save_db("news_posts", normalized_news)
 
 
 def get_db(key):
@@ -1906,120 +1938,167 @@ def api_leaderboard_profile(school_id):
     return jsonify({"success": True, "profile": match})
 
 
-def _normalize_landing_posts(raw_posts, section):
-    if not isinstance(raw_posts, list):
-        return []
-
+def _normalize_home_cards(raw_cards):
     normalized = []
-    for post in raw_posts:
-        if not isinstance(post, dict):
-            continue
+    source = raw_cards if isinstance(raw_cards, list) else []
+    for card_id in range(1, 5):
+        existing = next(
+            (
+                row
+                for row in source
+                if isinstance(row, dict) and int(row.get("id", 0) or 0) == card_id
+            ),
+            {},
+        )
         normalized.append(
             {
-                "post_id": str(post.get("post_id", "")).strip(),
-                "text": str(post.get("text", "")).strip(),
-                "image": str(post.get("image", "")).strip(),
-                "document": str(post.get("document", "")).strip(),
-                "created_at": str(post.get("created_at", "")).strip(),
-                "section": section,
+                "id": card_id,
+                "title": str(existing.get("title", "")).strip(),
+                "body": str(existing.get("body", "")).strip(),
             }
         )
     return normalized
 
 
-def _save_landing_file(uploaded_file, prefix):
-    if not (uploaded_file and getattr(uploaded_file, "filename", "")):
-        return ""
-    original_name = secure_filename(uploaded_file.filename)
-    if not original_name:
-        return ""
-    _, ext = os.path.splitext(original_name)
-    ext = (ext or "").lower()[:10]
-    final_name = f"{prefix}_{uuid.uuid4().hex[:10]}{ext}"
-    uploaded_file.save(os.path.join(app.config["LANDING_UPLOAD_FOLDER"], final_name))
-    return final_name
+def _normalize_news_posts(raw_posts):
+    if not isinstance(raw_posts, list):
+        return []
+
+    normalized = []
+    for row in raw_posts:
+        if not isinstance(row, dict):
+            continue
+        post_id = str(row.get("id", "")).strip() or uuid.uuid4().hex
+        image_name = row.get("image_filename")
+        if image_name is None:
+            final_image = None
+        else:
+            image_clean = str(image_name).strip()
+            final_image = image_clean if image_clean else None
+
+        normalized.append(
+            {
+                "id": post_id,
+                "title": str(row.get("title", "")).strip(),
+                "summary": str(row.get("summary", "")).strip(),
+                "body": str(row.get("body", "")).strip(),
+                "image_filename": final_image,
+                "date": str(row.get("date", "")).strip() or datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "author": str(row.get("author", "")).strip() or "Admin",
+            }
+        )
+    return normalized
 
 
-@app.route("/api/landing/posts")
-def api_get_landing_posts():
-    home_posts = _normalize_landing_posts(get_db("home_posts"), "home")
-    news_posts = _normalize_landing_posts(get_db("news_posts"), "news")
-    return jsonify({"home": home_posts, "news": news_posts})
+@app.route("/api/home_cards")
+def api_get_home_cards():
+    cards = _normalize_home_cards(get_db("home_cards"))
+    if get_db("home_cards") != cards:
+        save_db("home_cards", cards)
+    return jsonify(cards)
 
 
-@app.route("/api/admin/landing/<section>", methods=["GET", "POST"])
-def api_admin_landing_posts(section):
+@app.route("/api/home_cards", methods=["POST"])
+def api_save_home_cards():
     if not require_admin_session():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
-    target_section = str(section or "").strip().lower()
-    if target_section not in {"home", "news"}:
-        return jsonify({"success": False, "message": "Invalid section"}), 400
 
-    db_key = "home_posts" if target_section == "home" else "news_posts"
-    posts = _normalize_landing_posts(get_db(db_key), target_section)
+    payload = request.get_json(silent=True)
+    candidate = payload.get("cards") if isinstance(payload, dict) and isinstance(payload.get("cards"), list) else payload
+    if not isinstance(candidate, list):
+        return jsonify({"success": False, "message": "Cards payload must be a list."}), 400
 
-    if request.method == "GET":
-        return jsonify({"success": True, "posts": posts})
+    source_by_id = {}
+    for row in candidate:
+        if not isinstance(row, dict):
+            continue
+        try:
+            row_id = int(row.get("id", 0))
+        except Exception:
+            continue
+        if 1 <= row_id <= 4:
+            source_by_id[row_id] = row
 
-    post_id = str(request.form.get("post_id", "")).strip()
-    text = str(request.form.get("text", "")).strip()
-    image_name = _save_landing_file(request.files.get("image"), target_section)
-    document_name = _save_landing_file(request.files.get("document"), target_section)
-    if not post_id:
-        return jsonify({"success": False, "message": "Post ID is required."}), 400
-    if not text and not image_name and not document_name:
-        return jsonify({"success": False, "message": "Add text, image, or document first."}), 400
+    final_cards = []
+    for card_id in range(1, 5):
+        row = source_by_id.get(card_id, {})
+        final_cards.append(
+            {
+                "id": card_id,
+                "title": str(row.get("title", "")).strip(),
+                "body": str(row.get("body", "")).strip(),
+            }
+        )
 
-    duplicate = next((p for p in posts if p.get("post_id", "").lower() == post_id.lower()), None)
-    if duplicate:
-        return jsonify({"success": False, "message": "Post ID already exists."}), 400
-
-    posts.append(
-        {
-            "post_id": post_id,
-            "text": text,
-            "image": image_name,
-            "document": document_name,
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "section": target_section,
-        }
-    )
-    save_db(db_key, posts)
-    return jsonify({"success": True, "posts": posts})
+    save_db("home_cards", final_cards)
+    return jsonify({"success": True, "cards": final_cards})
 
 
-@app.route("/api/admin/landing/<section>/<post_id>", methods=["PUT", "DELETE"])
-def api_admin_landing_post_actions(section, post_id):
+@app.route("/api/news_posts")
+def api_get_news_posts():
+    posts = _normalize_news_posts(get_db("news_posts"))
+    posts.sort(key=lambda row: row.get("date", ""), reverse=True)
+    if get_db("news_posts") != posts:
+        save_db("news_posts", posts)
+    return jsonify(posts)
+
+
+@app.route("/api/news_posts", methods=["POST"])
+def api_create_news_post():
+    admin_id = require_admin_session()
+    if not admin_id:
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+    title = str(request.form.get("title", "")).strip()
+    summary = str(request.form.get("summary", "")).strip()
+    body = str(request.form.get("body", "")).strip()
+    if not title or not summary or not body:
+        return jsonify({"success": False, "message": "Title, summary, and body are required."}), 400
+
+    image_filename = save_post_image(request.files.get("image"))
+    if request.files.get("image") and not image_filename:
+        return jsonify({"success": False, "message": "Unsupported file type."}), 400
+
+    admin_profile = find_any_user(admin_id) or {}
+    new_post = {
+        "id": uuid.uuid4().hex,
+        "title": title,
+        "summary": summary,
+        "body": body,
+        "image_filename": image_filename,
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "author": str(admin_profile.get("name") or "Admin").strip(),
+    }
+
+    posts = _normalize_news_posts(get_db("news_posts"))
+    posts.insert(0, new_post)
+    save_db("news_posts", posts)
+    return jsonify({"success": True, "post": new_post, "posts": posts})
+
+
+@app.route("/api/news_posts/<post_id>", methods=["DELETE"])
+def api_delete_news_post(post_id):
     if not require_admin_session():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
-    target_section = str(section or "").strip().lower()
-    if target_section not in {"home", "news"}:
-        return jsonify({"success": False, "message": "Invalid section"}), 400
 
-    db_key = "home_posts" if target_section == "home" else "news_posts"
-    posts = _normalize_landing_posts(get_db(db_key), target_section)
-    idx = next(
-        (i for i, p in enumerate(posts) if p.get("post_id", "").strip().lower() == str(post_id).strip().lower()),
-        -1,
-    )
+    lookup = str(post_id or "").strip().lower()
+    posts = _normalize_news_posts(get_db("news_posts"))
+    idx = next((i for i, row in enumerate(posts) if str(row.get("id", "")).strip().lower() == lookup), -1)
     if idx < 0:
         return jsonify({"success": False, "message": "Post not found"}), 404
 
-    if request.method == "DELETE":
-        posts.pop(idx)
-        save_db(db_key, posts)
-        return jsonify({"success": True, "posts": posts})
+    deleted_post = posts.pop(idx)
+    image_name = deleted_post.get("image_filename")
+    if image_name:
+        image_path = os.path.join(app.config["UPLOAD_FOLDER"], image_name)
+        if os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+            except Exception:
+                logger.warning(f"Unable to remove deleted post media: {image_path}")
 
-    payload = request.get_json(silent=True) or {}
-    text = str(payload.get("text", "")).strip()
-    posts[idx]["text"] = text
-    save_db(db_key, posts)
+    save_db("news_posts", posts)
     return jsonify({"success": True, "posts": posts})
-
-
-@app.route("/LandingUploads/<path:filename>")
-def serve_landing_upload(filename):
-    return send_from_directory(app.config["LANDING_UPLOAD_FOLDER"], filename)
 
 
 @app.route("/Profile/<path:filename>")

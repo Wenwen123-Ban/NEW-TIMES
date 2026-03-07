@@ -329,55 +329,53 @@
 
     <div id="postHomeView" class="view-section">
         <div class="card glass-card p-4 mb-4">
-            <h5 class="fw-bold mb-3">Control Post Card</h5>
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="small fw-bold">Post ID</label>
-                    <input id="homePostId" class="form-control" placeholder="Post ID">
-                </div>
-                <div class="col-md-4">
-                    <label class="small fw-bold">Upload image:</label>
-                    <input id="homePostImage" type="file" class="form-control" accept="image/*">
-                </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <button class="btn btn-primary w-100" onclick="submitLandingPost('home')">Post button</button>
-                </div>
-                <div class="col-12">
-                    <label class="small fw-bold">Write Something:</label>
-                    <textarea id="homePostText" class="form-control" rows="3"></textarea>
-                </div>
+            <h5 class="fw-bold mb-3"><i class="fas fa-table-cells-large text-primary me-2"></i>Home Card Control</h5>
+            <div id="homeCardFeedback" class="small mb-2"></div>
+            <div class="home-card-editor-grid">
+                <article class="home-card-editor"><label class="fw-bold small">Card 1</label><input id="homeCardTitle1" class="form-control mb-2" placeholder="Card title"><textarea id="homeCardBody1" class="form-control" rows="4" placeholder="Card body"></textarea></article>
+                <article class="home-card-editor"><label class="fw-bold small">Card 2</label><input id="homeCardTitle2" class="form-control mb-2" placeholder="Card title"><textarea id="homeCardBody2" class="form-control" rows="4" placeholder="Card body"></textarea></article>
+                <article class="home-card-editor"><label class="fw-bold small">Card 3</label><input id="homeCardTitle3" class="form-control mb-2" placeholder="Card title"><textarea id="homeCardBody3" class="form-control" rows="4" placeholder="Card body"></textarea></article>
+                <article class="home-card-editor"><label class="fw-bold small">Card 4</label><input id="homeCardTitle4" class="form-control mb-2" placeholder="Card title"><textarea id="homeCardBody4" class="form-control" rows="4" placeholder="Card body"></textarea></article>
             </div>
-        </div>
-        <div class="card glass-card p-4">
-            <h5 class="fw-bold mb-3">Post Control card</h5>
-            <div id="homeAdminPostGrid" class="admin-post-grid"></div>
+            <div class="text-end mt-3">
+                <button class="btn btn-primary fw-bold" onclick="saveHomeCards()">Save All Cards</button>
+            </div>
         </div>
     </div>
 
     <div id="postNewsView" class="view-section">
         <div class="card glass-card p-4 mb-4">
-            <h5 class="fw-bold mb-3">Control Post Card</h5>
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="small fw-bold">Post ID</label>
-                    <input id="newsPostId" class="form-control" placeholder="Post ID">
+            <h5 class="fw-bold mb-3"><i class="fas fa-newspaper text-warning me-2"></i>News Post Control</h5>
+            <div id="newsPostFeedback" class="small mb-2"></div>
+            <div class="news-post-admin-layout">
+                <div class="news-upload-panel">
+                    <label class="small fw-bold">Image / Document</label>
+                    <label for="newsPostImage" id="newsUploadDropzone" class="news-upload-dropzone">
+                        <span class="upload-placeholder-text">Click to upload jpg, png, or pdf</span>
+                        <img id="newsUploadPreview" class="news-upload-preview" alt="Preview">
+                        <div id="newsUploadPdf" class="news-upload-pdf"><i class="fas fa-file-pdf"></i><span id="newsUploadPdfName"></span></div>
+                    </label>
+                    <input id="newsPostImage" type="file" class="d-none" accept=".jpg,.jpeg,.png,.pdf">
                 </div>
-                <div class="col-md-4">
-                    <label class="small fw-bold">Upload Document:</label>
-                    <input id="newsPostDocument" type="file" class="form-control" accept=".pdf,.doc,.docx,.txt,image/*">
-                </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <button class="btn btn-primary w-100" onclick="submitLandingPost('news')">Post button</button>
-                </div>
-                <div class="col-12">
-                    <label class="small fw-bold">Write details:</label>
-                    <textarea id="newsPostText" class="form-control" rows="3"></textarea>
+                <div class="news-form-panel">
+                    <label class="small fw-bold">Title</label>
+                    <input id="newsPostTitle" class="form-control mb-2" placeholder="Post title">
+                    <label class="small fw-bold">Summary</label>
+                    <textarea id="newsPostSummary" class="form-control mb-2" rows="2" placeholder="Short summary"></textarea>
+                    <label class="small fw-bold">Body</label>
+                    <textarea id="newsPostBody" class="form-control" rows="7" placeholder="Full article body"></textarea>
+                    <div class="text-end mt-3"><button class="btn btn-primary fw-bold" onclick="submitNewsPost()">Post</button></div>
                 </div>
             </div>
         </div>
         <div class="card glass-card p-4">
-            <h5 class="fw-bold mb-3">Post Control card</h5>
-            <div id="newsAdminPostGrid" class="admin-post-grid"></div>
+            <h5 class="fw-bold mb-3">Existing Posts</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light"><tr class="small text-uppercase"><th>Thumbnail</th><th>Title</th><th>Date</th><th class="text-end">Action</th></tr></thead>
+                    <tbody id="newsPostsListBody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -589,6 +587,11 @@
             </div>
         </div>
     </div>
+</div>
+
+<div id="newsImageModal" class="admin-image-overlay" aria-hidden="true">
+    <button type="button" class="admin-image-close" onclick="toggleModal('newsImageModal', false)">×</button>
+    <img id="newsImageModalContent" class="admin-image-expanded" alt="Expanded preview">
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

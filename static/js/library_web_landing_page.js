@@ -1,97 +1,171 @@
 (function () {
-  const state = {
-    home: [],
-    news: [],
-    homeIndex: 0,
-    newsIndex: 0,
-  };
+  const state = { cards: [], news: [] };
 
-  const homeCard = document.getElementById('homePostCard');
-  const newsCard = document.getElementById('newsPostCard');
+  const homeCardsGrid = document.getElementById('homeCardsGrid');
+  const newsDesktopList = document.getElementById('newsDesktopList');
+  const newsMobileStrip = document.getElementById('newsMobileStrip');
+  const newsReadModal = document.getElementById('newsReadModal');
+  const imageLightboxModal = document.getElementById('imageLightboxModal');
 
   function safe(v) {
-    return String(v || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function renderPost(section) {
-    const posts = state[section];
-    const indexKey = section === 'home' ? 'homeIndex' : 'newsIndex';
-    const card = section === 'home' ? homeCard : newsCard;
-    if (!card) return;
+  function toggleModal(id, show) {
+    const node = document.getElementById(id);
+    if (!node) return;
+    node.classList.toggle('show', !!show);
+    node.setAttribute('aria-hidden', show ? 'false' : 'true');
+    document.body.style.overflow = show ? 'hidden' : '';
+  }
 
-    if (!posts.length) {
-      card.innerHTML = '<p class="placeholder-text mb-0">No post yet.</p>';
+  function truncate(text, max = 110) {
+    const raw = String(text || '').trim();
+    return raw.length > max ? `${raw.slice(0, max - 1)}…` : raw;
+  }
+
+  function renderHomeCards() {
+    if (!homeCardsGrid) return;
+    if (!state.cards.length) {
+      homeCardsGrid.innerHTML = '<p class="placeholder-text">No cards yet.</p>';
       return;
     }
 
-    const post = posts[state[indexKey]];
-    const media = post.image
-      ? `<img src="/LandingUploads/${encodeURIComponent(post.image)}" class="landing-post-image" alt="${safe(post.post_id)}">`
-      : '';
-    const documentLink = post.document
-      ? `<a class="btn btn-sm btn-outline-light mt-2" href="/LandingUploads/${encodeURIComponent(post.document)}" target="_blank" rel="noopener">Open document</a>`
-      : '';
-
-    card.innerHTML = `
-      <span class="post-id-chip">${safe(post.post_id)}</span>
-      ${media}
-      <p class="mb-2 mt-2">${safe(post.text || '(no text)')}</p>
-      ${documentLink}
-    `;
+    homeCardsGrid.innerHTML = state.cards.map((card) => {
+      const title = String(card.title || '').trim();
+      const body = String(card.body || '').trim();
+      const empty = !title && !body;
+      return `
+        <article class="home-info-card ${empty ? 'placeholder' : ''}">
+          <h4>${safe(title || `Card ${card.id}`)}</h4>
+          <p>${safe(body || 'No content yet. Admin can update this card from dashboard.')}</p>
+        </article>
+      `;
+    }).join('');
   }
 
-  function rotate(section, step) {
-    const posts = state[section];
-    const indexKey = section === 'home' ? 'homeIndex' : 'newsIndex';
-    if (!posts.length) return;
-    const len = posts.length;
-    state[indexKey] = (state[indexKey] + step + len) % len;
-    renderPost(section);
+  function openNewsModal(post) {
+    document.getElementById('newsModalTitle').textContent = post.title || 'Untitled';
+    document.getElementById('newsModalMeta').textContent = `${post.date || ''} • ${post.author || 'Admin'}`;
+    document.getElementById('newsModalBody').textContent = post.body || '';
+
+    const img = document.getElementById('newsModalImage');
+    if (post.image_filename) {
+      img.src = `/Profile/${encodeURIComponent(post.image_filename)}`;
+      img.style.display = 'block';
+      img.onclick = () => {
+        const lightbox = document.getElementById('lightboxImage');
+        lightbox.src = img.src;
+        toggleModal('imageLightboxModal', true);
+      };
+    } else {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+      img.onclick = null;
+    }
+
+    toggleModal('newsReadModal', true);
+  }
+
+  function renderNewsDesktop() {
+    if (!newsDesktopList) return;
+    if (!state.news.length) {
+      newsDesktopList.innerHTML = '<p class="placeholder-text">No news posts yet.</p>';
+      return;
+    }
+
+    newsDesktopList.innerHTML = state.news.map((post, idx) => {
+      const hasImage = !!post.image_filename;
+      const imageMarkup = hasImage
+        ? `<div class="news-post-image-wrap"><img class="news-post-image" src="/Profile/${encodeURIComponent(post.image_filename)}" alt="${safe(post.title)}"></div>`
+        : '';
+      const textMarkup = `
+        <div class="news-post-text-wrap">
+          <h4 class="news-post-title">${safe(post.title || 'Untitled')}</h4>
+          <div class="news-post-date">${safe(post.date || '')}</div>
+          <p class="news-post-summary">${safe(post.summary || '')}</p>
+          <button type="button" class="read-more-btn" data-post-id="${safe(post.id)}">Read More</button>
+        </div>
+      `;
+      if (!hasImage) return `<article class="news-post-row no-image">${textMarkup}</article>`;
+      return idx % 2 === 0
+        ? `<article class="news-post-row">${imageMarkup}${textMarkup}</article>`
+        : `<article class="news-post-row">${textMarkup}${imageMarkup}</article>`;
+    }).join('');
+
+    newsDesktopList.querySelectorAll('.read-more-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const post = state.news.find((row) => String(row.id) === String(btn.dataset.postId));
+        if (post) openNewsModal(post);
+      });
+    });
+  }
+
+  function renderNewsMobile() {
+    if (!newsMobileStrip) return;
+    if (!state.news.length) {
+      newsMobileStrip.innerHTML = '<p class="placeholder-text">No news posts yet.</p>';
+      return;
+    }
+
+    newsMobileStrip.innerHTML = state.news.map((post) => `
+      <article class="news-mobile-card" data-post-id="${safe(post.id)}">
+        ${post.image_filename ? `<img class="news-mobile-thumb" src="/Profile/${encodeURIComponent(post.image_filename)}" alt="${safe(post.title)}">` : ''}
+        <div class="news-mobile-title">${safe(post.title || 'Untitled')}</div>
+        <div class="news-mobile-date">${safe(post.date || '')}</div>
+        <p class="news-mobile-summary">${safe(truncate(post.summary || ''))}</p>
+      </article>
+    `).join('');
+
+    newsMobileStrip.querySelectorAll('.news-mobile-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const post = state.news.find((row) => String(row.id) === String(card.dataset.postId));
+        if (post) openNewsModal(post);
+      });
+    });
   }
 
   function renderLeaderboard(rows) {
     const tbody = document.querySelector('#catalogLeaderboardTable tbody');
     if (!tbody) return;
     tbody.innerHTML = rows.map((row, idx) => `
-      <tr>
-        <td>${idx + 1}</td>
-        <td>${safe(row.name)}</td>
-        <td>${safe(row.school_id)}</td>
-        <td>${safe(row.total_borrowed)}</td>
-      </tr>
+      <tr><td>${idx + 1}</td><td>${safe(row.name)}</td><td>${safe(row.school_id)}</td><td>${safe(row.total_borrowed)}</td></tr>
     `).join('') || '<tr><td colspan="4" class="text-center">No data yet.</td></tr>';
   }
 
   async function loadLandingContent() {
     try {
-      const [postRes, lbRes] = await Promise.all([
-        fetch('/api/landing/posts'),
+      const [cardRes, newsRes, lbRes] = await Promise.all([
+        fetch('/api/home_cards'),
+        fetch('/api/news_posts'),
         fetch('/api/monthly_leaderboard')
       ]);
-      const postData = await postRes.json();
+      const cards = await cardRes.json();
+      const news = await newsRes.json();
       const lbData = await lbRes.json();
 
-      state.home = Array.isArray(postData.home) ? postData.home : [];
-      state.news = Array.isArray(postData.news) ? postData.news : [];
-      state.homeIndex = 0;
-      state.newsIndex = 0;
+      state.cards = Array.isArray(cards) ? cards : [];
+      state.news = Array.isArray(news) ? news : [];
 
-      renderPost('home');
-      renderPost('news');
+      renderHomeCards();
+      renderNewsDesktop();
+      renderNewsMobile();
       renderLeaderboard(Array.isArray(lbData.top_borrowers) ? lbData.top_borrowers : []);
     } catch (error) {
       console.error(error);
     }
   }
 
-  document.getElementById('homePrevBtn')?.addEventListener('click', () => rotate('home', -1));
-  document.getElementById('homeNextBtn')?.addEventListener('click', () => rotate('home', 1));
-  document.getElementById('newsPrevBtn')?.addEventListener('click', () => rotate('news', -1));
-  document.getElementById('newsNextBtn')?.addEventListener('click', () => rotate('news', 1));
+  document.querySelectorAll('[data-close]').forEach((btn) => {
+    btn.addEventListener('click', () => toggleModal(btn.dataset.close, false));
+  });
+
+  newsReadModal?.addEventListener('click', (e) => {
+    if (e.target === newsReadModal) toggleModal('newsReadModal', false);
+  });
+  imageLightboxModal?.addEventListener('click', (e) => {
+    if (e.target === imageLightboxModal) toggleModal('imageLightboxModal', false);
+  });
 
   loadLandingContent();
 })();
