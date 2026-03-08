@@ -128,6 +128,8 @@ let currentID = null;
           status: transaction.status,
           expiry: expiryDate ? expiryDate.toISOString() : null,
           pickup_schedule: transaction.pickup_schedule || "",
+          pickup_at: transaction.pickup_at || transaction.unavailable_at || "",
+          borrowed_by: transaction.borrowed_by || "",
           queue_position: transaction.queue_position,
           queue_total: transaction.queue_total,
           same_slot_conflict: !!transaction.same_slot_conflict,
@@ -176,7 +178,8 @@ let currentID = null;
         }
 
         userActiveLeases[key] = userActiveLeases[key].filter((lease) => {
-          if (getNormalizedStatus(lease) === "reserved") return true;
+          const leaseStatus = getNormalizedStatus(lease);
+          if (["reserved", "unavailable", "missed"].includes(leaseStatus)) return true;
           const expiryTime = new Date(lease.expiry).getTime();
           return Number.isFinite(expiryTime) && expiryTime > now;
         });
@@ -241,7 +244,7 @@ let currentID = null;
                   <div>
                     <div class="fw-bold">${lease.title}</div>
                     <code class="small fw-bold">${lease.book_no}</code><br>
-                    <span class="badge ${getNormalizedStatus(lease) === "reserved" ? "status-badge" : getNormalizedStatus(lease) === "missed" ? "bg-danger" : "bg-success"}">${lease.status}</span>
+                    <span class="badge ${getNormalizedStatus(lease) === "reserved" ? "status-badge" : getNormalizedStatus(lease) === "missed" ? "bg-danger" : getNormalizedStatus(lease) === "unavailable" ? "bg-secondary" : "bg-success"}">${getNormalizedStatus(lease) === "unavailable" ? "BORROWED BY OTHER" : lease.status}</span>
                   </div>
                   <div class="text-end">
                     ${getNormalizedStatus(lease) === "reserved"
@@ -253,7 +256,7 @@ let currentID = null;
                       : getNormalizedStatus(lease) === "missed"
                         ? `<span class="small fw-bold text-danger d-block">Failed to Pick Up</span>`
                         : getNormalizedStatus(lease) === "unavailable"
-                          ? `<span class="small fw-bold text-danger d-block">Book is no longer available (borrowed by another user)</span>`
+                          ? `<span class="small fw-bold text-danger d-block">Book is no longer available (borrowed by another user)</span><span class="small text-muted d-block">Borrowed by: ${lease.borrowed_by || "Unknown user"}</span><span class="small text-muted d-block">Picked up at: ${formatPickupDateTime(lease.pickup_at)}</span><span class="small text-muted d-block">Picked up: ${formatPickupDateTime(lease.pickup_at)}</span>`
                           : `<span class="timer small fw-bold d-block" data-expiry="${lease.expiry}" data-status="${lease.status}" data-book-no="${lease.book_no}">Calculating...</span>`}
                     ${["reserved","unavailable","missed"].includes(getNormalizedStatus(lease)) ? `<button class="btn btn-sm btn-outline-danger rounded-pill mt-1 cancel-reservation-btn" onclick="cancelReservation('${lease.book_no}')">Remove Reservation List</button>` : ""}
                   </div>

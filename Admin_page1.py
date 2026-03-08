@@ -1632,9 +1632,12 @@ def api_process_trans():
                         if t_school_id == chosen_school_id:
                             t["status"] = "Converted"
                         else:
+                            pickup_at = datetime.now().strftime("%Y-%m-%d %H:%M")
                             t["status"] = "Unavailable"
                             t["unavailable_reason"] = "This book was borrowed by another user before your reserved pickup date."
-                            t["unavailable_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            t["unavailable_at"] = pickup_at
+                            t["pickup_at"] = pickup_at
+                            t["borrowed_by"] = (reserved_transaction or {}).get("borrower_name", "") or borrower_name
 
                 now = datetime.now()
                 try:
