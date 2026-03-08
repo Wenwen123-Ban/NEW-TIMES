@@ -397,9 +397,7 @@ def get_db(key):
             if key == "transactions":
                 cursor.execute(
                     """
-                    SELECT id, book_no, borrower_id, borrower_name, status,
-                           date_borrowed, date_returned, due_date,
-                           pickup_schedule, due_date_override
+                    SELECT *
                     FROM transactions
                     """
                 )
@@ -407,15 +405,16 @@ def get_db(key):
                 return [
                     {
                         "id": row.get("id"),
-                        "book_no": row.get("book_no", ""),
-                        "school_id": row.get("borrower_id", ""),
+                        "book_no": row.get("book_no") or row.get("book_id", ""),
+                        "school_id": row.get("borrower_id") or row.get("school_id") or row.get("user_id", ""),
                         "borrower_name": row.get("borrower_name", ""),
-                        "status": row.get("status", ""),
-                        "date": row.get("date_borrowed", ""),
-                        "return_date": row.get("date_returned", ""),
-                        "expiry": row.get("due_date", ""),
-                        "pickup_schedule": row.get("pickup_schedule", ""),
+                        "status": row.get("status") or row.get("transaction_status", ""),
+                        "date": row.get("date_borrowed") or row.get("date", ""),
+                        "return_date": row.get("date_returned") or row.get("return_date", ""),
+                        "expiry": row.get("due_date") or row.get("expiry", ""),
+                        "pickup_schedule": row.get("pickup_schedule") or row.get("pickup_slot", ""),
                         "due_date_override": row.get("due_date_override", ""),
+                        "request_id": row.get("request_id", ""),
                     }
                     for row in rows
                 ]
@@ -1499,7 +1498,22 @@ def api_admin_get_admins():
 def api_admin_get_transactions():
     if not require_admin_session():
         return jsonify({"success": False, "message": "Admin authorization required"}), 401
-    return jsonify(get_db("transactions"))
+    transactions = get_db("transactions")
+    books = get_db("books")
+    books_by_no = {
+        str((b or {}).get("book_no", "")).strip().lower(): (b or {}).get("title", "")
+        for b in (books if isinstance(books, list) else [])
+        if isinstance(b, dict)
+    }
+
+    for tx in transactions if isinstance(transactions, list) else []:
+        if not isinstance(tx, dict):
+            continue
+        book_ref = str(tx.get("book_no") or tx.get("book_id") or "").strip()
+        tx["book_no"] = book_ref
+        tx["title"] = books_by_no.get(book_ref.lower(), tx.get("title") or "Unknown Title")
+
+    return jsonify(transactions if isinstance(transactions, list) else [])
 
 
 @app.route("/api/admin/approval-records")
@@ -1789,7 +1803,11 @@ def api_cancel_reservation():
     transactions = get_db("transactions")
 
     def _cancel_status_allowed(tx):
-        return str(tx.get("status", "")).strip().lower() in {"reserved", "unavailable"}
+        status = str(tx.get("status", "")).strip().lower()
+        return status in {"", "reserved", "unavailable", "borrowed"}
+
+    def _tx_book_ref(tx):
+        return str(tx.get("book_no") or tx.get("book_id") or "").strip()
 
     def _parse_tx_date(tx):
         raw = str(tx.get("date") or tx.get("reserved_at") or "").strip()
@@ -1805,7 +1823,7 @@ def api_cancel_reservation():
     candidates = [
         t
         for t in transactions
-        if t.get("book_no") == b_no and _cancel_status_allowed(t)
+        if _tx_book_ref(t) == str(b_no or "").strip() and _cancel_status_allowed(t)
     ]
 
     target_transaction = None
@@ -1867,6 +1885,10 @@ def api_process_trans():
     with _db_write_lock:
         books = get_db("books")
         transactions = get_db("transactions")
+        normalized_book_no = str(b_no or "").strip()
+
+        def _tx_book_ref(tx):
+            return str(tx.get("book_no") or tx.get("book_id") or "").strip()
 
         # LOGIC 1: RETURN
         if action == "return":
@@ -1879,7 +1901,8 @@ def api_process_trans():
                 if b.get("book_no") == b_no:
                     b["status"] = "Available"
             for t in transactions:
-                if t.get("book_no") != b_no or normalize(t.get("status")) not in ["reserved", "borrowed"]:
+                tx_status = normalize(t.get("status"))
+                if _tx_book_ref(t) != normalized_book_no or tx_status not in ["", "reserved", "borrowed", "unavailable"]:
                     continue
 
                 tx_request_id = str(t.get("request_id", "")).strip()
