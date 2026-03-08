@@ -528,6 +528,8 @@
       .school-logo {
         height: 70px;
         width: auto;
+        border-radius: 50%;
+        overflow: hidden;
         transition: transform 0.3s ease;
       }
 
