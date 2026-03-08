@@ -314,6 +314,32 @@ def _get_table_columns(conn, table):
         return [row["Field"] for row in cur.fetchall()]
 
 
+def _get_table_unique_key_columns(conn, table):
+    with conn.cursor() as cur:
+        cur.execute(f"SHOW INDEX FROM `{table}`")
+        index_rows = cur.fetchall()
+
+    unique_indexes = {}
+    for row in index_rows:
+        if row.get("Non_unique") != 0:
+            continue
+        index_name = row.get("Key_name")
+        seq = int(row.get("Seq_in_index", 0) or 0)
+        column_name = row.get("Column_name")
+        if not index_name or not column_name:
+            continue
+        unique_indexes.setdefault(index_name, []).append((seq, column_name))
+
+    ordered = []
+    for name, pairs in unique_indexes.items():
+        sorted_cols = [col for _, col in sorted(pairs, key=lambda item: item[0])]
+        if name == "PRIMARY":
+            return sorted_cols
+        ordered.append(sorted_cols)
+
+    return ordered[0] if ordered else []
+
+
 def get_db(key):
     default = {} if key in {"config", "log_rec", "date_restricted"} else []
     table = DB_TABLES.get(key)
@@ -389,6 +415,17 @@ def save_db(key, data):
                 cols = _get_table_columns(conn, table)
                 auto_cols = {"id", "ID"}
                 writable_cols = [c for c in cols if c not in auto_cols]
+                upsert_keys = {"books", "transactions", "users", "admins"}
+
+                if key in upsert_keys and key == "books" and "book_no" in cols and "book_no" not in writable_cols:
+                    writable_cols = ["book_no"] + writable_cols
+
+                unique_cols = _get_table_unique_key_columns(conn, table) if key in upsert_keys else []
+                if key == "books":
+                    if "book_no" not in unique_cols and "book_no" in cols:
+                        unique_cols = ["book_no"]
+                    elif "book_no" in unique_cols:
+                        unique_cols = ["book_no"] + [c for c in unique_cols if c != "book_no"]
 
                 with conn.cursor() as cur:
                     if key == "config" and "config_key" in cols and "config_value" in cols:
@@ -412,15 +449,66 @@ def save_db(key, data):
                         conn.commit()
                         return
 
-                    cur.execute(f"DELETE FROM `{table}`")
+                    if key not in upsert_keys:
+                        cur.execute(f"DELETE FROM `{table}`")
+
+                    def _upsert_row(row_data):
+                        if not isinstance(row_data, dict):
+                            return
+
+                        payload = dict(row_data)
+                        if key == "books" and "book_no" in cols and payload.get("book_no") in (None, ""):
+                            payload["book_no"] = payload.get("id")
+
+                        insert_cols = [c for c in writable_cols if c in payload]
+                        if key in upsert_keys and key == "books" and "book_no" in cols and "book_no" not in insert_cols:
+                            if payload.get("book_no") not in (None, ""):
+                                insert_cols = ["book_no"] + insert_cols
+
+                        if not insert_cols:
+                            return
+
+                        placeholders = ", ".join(["%s"] * len(insert_cols))
+                        col_sql = ", ".join([f"`{c}`" for c in insert_cols])
+                        values = [
+                            json.dumps(payload.get(c), ensure_ascii=False) if isinstance(payload.get(c), (dict, list)) else payload.get(c)
+                            for c in insert_cols
+                        ]
+
+                        if key in upsert_keys and unique_cols:
+                            non_key_update_cols = [c for c in insert_cols if c not in unique_cols]
+                            if key == "books":
+                                priority_updates = [c for c in ["status", "title", "category"] if c in non_key_update_cols]
+                                other_updates = [c for c in non_key_update_cols if c not in priority_updates]
+                                non_key_update_cols = priority_updates + other_updates
+
+                            if non_key_update_cols:
+                                update_sql = ", ".join([f"`{c}`=VALUES(`{c}`)" for c in non_key_update_cols])
+                                cur.execute(
+                                    f"INSERT INTO `{table}` ({col_sql}) VALUES ({placeholders}) ON DUPLICATE KEY UPDATE {update_sql}",
+                                    values,
+                                )
+                            else:
+                                cur.execute(
+                                    f"INSERT INTO `{table}` ({col_sql}) VALUES ({placeholders}) ON DUPLICATE KEY UPDATE `{insert_cols[0]}`=`{insert_cols[0]}`",
+                                    values,
+                                )
+                        else:
+                            cur.execute(f"INSERT INTO `{table}` ({col_sql}) VALUES ({placeholders})", values)
 
                     if isinstance(data, dict):
                         row_data = data
-                        insert_cols = [c for c in writable_cols if c in row_data]
-                        if not insert_cols and len(writable_cols) == 1:
+                        if key not in upsert_keys:
+                            insert_cols = [c for c in writable_cols if c in row_data]
+                        else:
+                            insert_cols = []
+
+                        if key not in upsert_keys and not insert_cols and len(writable_cols) == 1:
                             insert_cols = [writable_cols[0]]
                             row_data = {writable_cols[0]: json.dumps(data, ensure_ascii=False)}
-                        if insert_cols:
+                        if key in upsert_keys:
+                            _upsert_row(row_data)
+                        elif insert_cols:
                             placeholders = ", ".join(["%s"] * len(insert_cols))
                             col_sql = ", ".join([f"`{c}`" for c in insert_cols])
                             values = [
@@ -434,16 +522,19 @@ def save_db(key, data):
                                 if not item or not str(item).strip():
                                     continue  # skip empty entries
                             if isinstance(item, dict):
-                                insert_cols = [c for c in writable_cols if c in item]
-                                if not insert_cols:
-                                    continue
-                                placeholders = ", ".join(["%s"] * len(insert_cols))
-                                col_sql = ", ".join([f"`{c}`" for c in insert_cols])
-                                values = [
-                                    json.dumps(item.get(c), ensure_ascii=False) if isinstance(item.get(c), (dict, list)) else item.get(c)
-                                    for c in insert_cols
-                                ]
-                                cur.execute(f"INSERT INTO `{table}` ({col_sql}) VALUES ({placeholders})", values)
+                                if key in upsert_keys:
+                                    _upsert_row(item)
+                                else:
+                                    insert_cols = [c for c in writable_cols if c in item]
+                                    if not insert_cols:
+                                        continue
+                                    placeholders = ", ".join(["%s"] * len(insert_cols))
+                                    col_sql = ", ".join([f"`{c}`" for c in insert_cols])
+                                    values = [
+                                        json.dumps(item.get(c), ensure_ascii=False) if isinstance(item.get(c), (dict, list)) else item.get(c)
+                                        for c in insert_cols
+                                    ]
+                                    cur.execute(f"INSERT INTO `{table}` ({col_sql}) VALUES ({placeholders})", values)
                             else:
                                 if len(writable_cols) == 1:
                                     cur.execute(
