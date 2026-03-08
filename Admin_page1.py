@@ -275,55 +275,11 @@ def initialize_system():
     # Ensure categories are available and in sync with book data
     sync_categories_with_books()
 
-    # MIGRATION: Ensure status fields exist
-    users = get_db("users")
-    changed = False
-    for u in users:
-        if "status" not in u:
-            u["status"] = "approved"
-            changed = True
-    if changed:
-        save_db("users", users)
-
-    # MIGRATION: Ensure phone_number exists for users/admins
-    for reg_key in ["users", "admins"]:
-        members = get_db(reg_key)
-        registry_changed = False
-        for member in members:
-            if "phone_number" not in member:
-                member["phone_number"] = ""
-                registry_changed = True
-        if registry_changed:
-            save_db(reg_key, members)
-
-    # MIGRATION: Ensure every book has a non-empty status for LBAS rendering/actions.
-    books = get_db("books")
-    books_changed = False
-    for book in books:
-        if not isinstance(book, dict):
-            continue
-        status = str(book.get("status", "")).strip()
-        if not status:
-            book["status"] = "Available"
-            books_changed = True
-    if books_changed:
-        save_db("books", books)
-
-    # Ensure Root Admin exists
-    admins = get_db("admins")
-    if not admins:
-        admins.append(
-            {
-                "name": "System Administrator",
-                "school_id": "admin",
-                "password": "admin",
-                "category": "Staff",
-                "photo": "default.png",
-                "status": "approved",
-                "created_at": "SYSTEM_INIT",
-            }
-        )
-        save_db("admins", admins)
+    # Startup must not rewrite users/books/admins; only bootstrap empty table-backed stores.
+    # Touch these registries so they are created/readable, but never persist mutations here.
+    _ = get_db("users")
+    _ = get_db("books")
+    _ = get_db("admins")
 
     # Ensure home cards always has 4 structured slots.
     raw_cards = get_db("home_cards")
@@ -436,7 +392,7 @@ def save_db(key, data):
 
                 with conn.cursor() as cur:
                     if key == "config" and "config_key" in cols and "config_value" in cols:
-                        cur.execute(f"TRUNCATE TABLE `{table}`")
+                        cur.execute(f"DELETE FROM `{table}`")
                         payload = data if isinstance(data, dict) else {}
                         for ckey, cval in payload.items():
                             cur.execute(
@@ -448,7 +404,7 @@ def save_db(key, data):
 
                     if key in {"log_rec", "date_restricted"} and any(c in cols for c in ["data", "json_data"]):
                         blob_col = "data" if "data" in cols else "json_data"
-                        cur.execute(f"TRUNCATE TABLE `{table}`")
+                        cur.execute(f"DELETE FROM `{table}`")
                         cur.execute(
                             f"INSERT INTO `{table}` (`{blob_col}`) VALUES (%s)",
                             (json.dumps(data if isinstance(data, dict) else {}, ensure_ascii=False),),
@@ -456,7 +412,7 @@ def save_db(key, data):
                         conn.commit()
                         return
 
-                    cur.execute(f"TRUNCATE TABLE `{table}`")
+                    cur.execute(f"DELETE FROM `{table}`")
 
                     if isinstance(data, dict):
                         row_data = data
