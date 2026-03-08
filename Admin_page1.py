@@ -811,12 +811,19 @@ def run_auto_sync_engine():
             continue
 
     # 2. Sync Recovery Tickets (Cleanup expired)
-    initial_tickets = len(tickets)
-    tickets = [
-        t for t in tickets if datetime.strptime(t["expiry"], "%Y-%m-%d %H:%M:%S") > now
-    ]
-    if len(tickets) != initial_tickets:
-        save_db("tickets", tickets)
+    if isinstance(tickets, list) and tickets:
+        initial_tickets = len(tickets)
+        def _safe_ticket_valid(t):
+            try:
+                exp = t.get("expiry", "") if isinstance(t, dict) else ""
+                if not exp:
+                    return False
+                return datetime.strptime(str(exp), "%Y-%m-%d %H:%M:%S") > now
+            except Exception:
+                return False
+        tickets = [t for t in tickets if _safe_ticket_valid(t)]
+        if len(tickets) != initial_tickets:
+            save_db("tickets", tickets)
 
     if changes_made:
         save_db("books", books)
