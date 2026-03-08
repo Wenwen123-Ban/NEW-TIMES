@@ -811,7 +811,7 @@ let editModal;
                 <div><span class="fw-bold text-dark">Book:</span> ${record.title || '-'} (${record.book_no || '-'})</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Borrower:</span> ${record.borrower_name || '-'} (${record.school_id || '-'})</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Phone:</span> ${record.phone_number || '-'}</div>
-                <div class="mt-1"><span class="fw-bold text-dark">Pickup Date:</span> ${record.pickup_schedule || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Pickup Date:</span> ${pickupDateOnly(record.pickup_schedule)}</div><div class="mt-1"><span class="fw-bold text-dark">Pickup Time:</span> ${pickupTimeOnly(record.pickup_schedule)}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Borrowed Date:</span> ${record.date || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Return Due:</span> ${record.expiry || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Request ID:</span> ${record.request_id || '-'}</div>
@@ -924,7 +924,7 @@ let editModal;
             if(data.success && data.profile.is_staff) {
                 localStorage.setItem('isStaffAuth', 'true');
                 localStorage.setItem('adminName', data.profile.name);
-                localStorage.setItem('adminPhoto', data.profile.photo);
+                localStorage.setItem('adminPhoto', data.profile.photo || 'default.png');
                 localStorage.setItem('adminSchoolId', data.profile.school_id || u);
                 localStorage.setItem('token', data.token || '');
                 localStorage.setItem('adminToken', data.token || '');
@@ -981,6 +981,12 @@ let editModal;
     }
 
     function executeUnlock(name, photo, schoolId = '', token = '') {
+        const safePhoto = (
+            photo &&
+            photo !== 'null' &&
+            photo !== 'None' &&
+            photo !== 'undefined'
+        ) ? photo : 'default.png';
         isStaff = true;
         staffSessionID = (schoolId || localStorage.getItem('adminSchoolId') || '').toLowerCase();
         staffSessionToken = token || localStorage.getItem('adminToken') || '';
@@ -994,8 +1000,8 @@ let editModal;
         document.getElementById('loginForm')?.classList.remove('active');
         document.getElementById('adminProfile').style.display = 'block';
         document.getElementById('activeAdminName').innerText = name;
-        document.getElementById('headerAvatar').src = `/Profile/${photo}`;
-        document.getElementById('activeAdminPhoto').src = `/Profile/${photo}`;
+        document.getElementById('headerAvatar').src = `/Profile/${safePhoto}`;
+        document.getElementById('activeAdminPhoto').src = `/Profile/${safePhoto}`;
         document.getElementById('authStatusBadge').className = "alert alert-success py-2 small fw-bold text-center border-0 shadow-sm rounded-4";
         document.getElementById('authStatusBadge').innerHTML = '<i class="fas fa-check-circle me-2"></i>AUTHORIZED';
         const link = document.getElementById('linkLeaderboard');
@@ -1030,11 +1036,45 @@ let editModal;
             .sort((a, b) => parseTxDate(b) - parseTxDate(a))[0] || null;
     }
 
+    function pickupDateOnly(schedule) {
+        if (!schedule) return 'Not set';
+        return schedule.split(' ')[0] || schedule;
+    }
+
+    function pickupTimeOnly(schedule) {
+        if (!schedule) return 'Not set';
+        const parts = schedule.split(' ');
+        if (parts.length < 2) return 'Time not specified';
+        const [h, m] = parts[1].split(':').map(Number);
+        const period = h >= 12 ? 'PM' : 'AM';
+        const hour12 = h % 12 || 12;
+        return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+    }
+
     function showTransactionInfo(bookNo) {
         const transaction = getLatestTransactionForBook(bookNo, ['Reserved', 'Borrowed']);
         if (!transaction) return;
         const member = findMemberById(transaction.school_id) || {};
         document.getElementById('transactionModalTitle').innerText = 'Borrower Profile & Book Details';
+        const sameSlot = masterTransactions.filter(other =>
+            other.book_no === transaction.book_no &&
+            other.pickup_schedule === transaction.pickup_schedule &&
+            String(other.school_id || '').toLowerCase() !== String(transaction.school_id || '').toLowerCase() &&
+            String(other.status || '').toLowerCase() === 'reserved'
+        );
+
+        let warningHTML = '';
+        if (sameSlot.length > 0) {
+            warningHTML = `
+            <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px;margin-top:10px;">
+              ⚠️ <strong>Same Time Slot Conflict</strong><br>
+              <small>
+                ${sameSlot.length} other user(s) reserved this book for the exact same date and time.
+                First to arrive at the library counter gets the book. Use your judgment as librarian.
+              </small>
+            </div>`;
+        }
+
         document.getElementById('transactionModalBody').innerHTML = `
             <div class="d-flex align-items-center gap-3 mb-3">
                 <img src="/Profile/${member.photo || 'default.png'}" class="rounded-circle" style="width:58px;height:58px;object-fit:cover;" alt="profile">
@@ -1047,8 +1087,10 @@ let editModal;
                 <div><span class="fw-bold text-dark">Book No:</span> <code>${transaction.book_no || '-'}</code></div>
                 <div class="mt-1"><span class="fw-bold text-dark">Title:</span> ${transaction.title || 'Unknown Title'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Reservation Date:</span> ${transaction.date || '-'}</div>
-                <div class="mt-1"><span class="fw-bold text-dark">Pickup Date:</span> ${transaction.pickup_schedule || 'Not specified'}</div>
+                <div class="mt-1"><strong>Pickup Date:</strong> ${pickupDateOnly(transaction.pickup_schedule)}</div>
+                <div><strong>Pickup Time:</strong> ${pickupTimeOnly(transaction.pickup_schedule)}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Return Date:</span> ${transaction.expiry || 'Not set yet'}</div>
+                ${warningHTML}
             </div>`;
         transactionDetailModal.show();
     }
@@ -1135,13 +1177,19 @@ let editModal;
     async function syncMonitor() {
         const active = masterTransactions.filter((t) => {
             const status = normalizeStatus(t.status);
-            return status === 'borrowed' || status === 'reserved';
+            return (status === 'borrowed' || status === 'reserved') && status !== 'missed';
         });
         document.getElementById('monitorBody').innerHTML = active.map((t) => {
             const status = normalizeStatus(t.status);
             const statusLabel = status ? `${status.charAt(0).toUpperCase()}${status.slice(1)}` : 'Unknown';
             const isReserved = status === 'reserved';
-            return `<tr><td class="ps-4"><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.title || 'Unknown Title'}</td><td>${t.borrower_name || '-'}</td><td class="small fw-bold">${t.school_id || '-'}</td><td>${isReserved ? (t.pickup_schedule || t.date || '-') : (t.expiry || '-')}</td><td><span class="status-pill badge-${status || 'unknown'}">${statusLabel}</span></td><td class="text-end pe-4">${isStaff ? `<div class="d-flex gap-1 justify-content-end"><button class="btn btn-sm btn-light border rounded-pill px-3" onclick="showTransactionInfo('${t.book_no}')">Info</button><button class="btn btn-sm btn-primary rounded-pill px-3" ${!isReserved ? 'disabled' : ''} onclick="openBorrowForm('${t.book_no}')">Borrowed</button><button class="btn btn-sm btn-danger rounded-pill px-3" onclick="cancelReservation('${t.book_no}', '${t.school_id || ''}', '${t.request_id || ''}', '${status}')">Release</button></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`;
+            const queueInfo = isReserved && t.queue_position && t.queue_total
+                ? `<div class="small text-muted mt-1">Queue: #${t.queue_position} of ${t.queue_total}</div>`
+                : '';
+            const slotWarn = isReserved && t.same_slot_conflict
+                ? `<div class="small text-warning mt-1">⚠️ Same slot conflict</div>`
+                : '';
+            return `<tr><td class="ps-4"><code class="fw-bold text-dark">${t.book_no}</code></td><td class="small fw-bold">${t.title || 'Unknown Title'}</td><td>${t.borrower_name || '-'}</td><td class="small fw-bold">${t.school_id || '-'}</td><td>${isReserved ? (t.pickup_schedule || t.date || '-') : (t.expiry || '-')}</td><td><span class="status-pill badge-${status || 'unknown'}">${statusLabel}</span>${queueInfo}${slotWarn}</td><td class="text-end pe-4">${isStaff ? `<div class="d-flex gap-1 justify-content-end"><button class="btn btn-sm btn-light border rounded-pill px-3" onclick="showTransactionInfo('${t.book_no}')">Info</button><button class="btn btn-sm btn-primary rounded-pill px-3" ${!isReserved ? 'disabled' : ''} onclick="openBorrowForm('${t.book_no}')">Borrowed</button><button class="btn btn-sm btn-danger rounded-pill px-3" onclick="cancelReservation('${t.book_no}', '${t.school_id || ''}', '${t.request_id || ''}', '${status}')">Release</button></div>` : `<i class="fas fa-lock text-muted"></i>`}</td></tr>`;
         }).join('') || '<tr><td colspan="7" class="text-center py-4 text-muted">No active transactions.</td></tr>';
         updateTimers();
     }

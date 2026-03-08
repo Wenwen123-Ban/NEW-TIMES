@@ -7,6 +7,36 @@
   const newsReadModal = document.getElementById('newsReadModal');
   const imageLightboxModal = document.getElementById('imageLightboxModal');
 
+  let aboutModalEscHandler = null;
+
+  function openAboutModal() {
+    const backdrop = document.getElementById('aboutModalBackdrop');
+    if (!backdrop) return;
+    backdrop.classList.add('active');
+    backdrop.setAttribute('aria-hidden', 'false');
+    if (!aboutModalEscHandler) {
+      aboutModalEscHandler = function (event) {
+        if (event.key === 'Escape') {
+          closeAboutModal();
+        }
+      };
+    }
+    document.addEventListener('keydown', aboutModalEscHandler);
+  }
+
+  function closeAboutModal() {
+    const backdrop = document.getElementById('aboutModalBackdrop');
+    if (!backdrop) return;
+    backdrop.classList.remove('active');
+    backdrop.setAttribute('aria-hidden', 'true');
+    if (aboutModalEscHandler) {
+      document.removeEventListener('keydown', aboutModalEscHandler);
+    }
+  }
+
+  window.openAboutModal = openAboutModal;
+  window.closeAboutModal = closeAboutModal;
+
   function safe(v) {
     return String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
@@ -168,4 +198,22 @@
   });
 
   loadLandingContent();
+
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const footer = document.querySelector('footer');
+    const trigger = document.getElementById('aboutTriggerBtn');
+    if (!footer || !trigger || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          trigger.classList.toggle('footer-overlap', entry.isIntersecting);
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(footer);
+  });
 })();

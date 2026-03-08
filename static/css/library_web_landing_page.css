@@ -1,12 +1,20 @@
-:root {
+ :root {
+  --navy: #0a1628;
+  --blue: #1565c0;
+  --blue-mid: #1976d2;
+  --blue-light: #e3f0ff;
+  --gold: #f0b429;
+  --gold-light: #fef3c7;
+  --white: #ffffff;
+  --gray: #f4f6fb;
+  --text: #1a2340;
+  --muted: #6b7a99;
   --bg-overlay: rgba(0, 0, 0, 0.45);
   --glass: rgba(0, 0, 0, 0.55);
   --glass-border: rgba(255, 255, 255, 0.32);
-  --accent: #f0b429;
   --text-light: #f7f9ff;
-  --navy: #0a1628;
-  --blue: #1565c0;
 }
+
 
 * { box-sizing: border-box; }
 
@@ -162,4 +170,99 @@ body::before { content: ""; position: fixed; inset: 0; background: var(--bg-over
   .news-mobile-strip, .news-mobile-hint { display: flex; }
   .news-mobile-hint { justify-content: center; }
   .main-footer { margin-top: 16px; padding: 16px; }
+}
+
+
+#aboutModalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 997;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+#aboutModalBackdrop.active {
+  display: flex;
+}
+
+#aboutModal {
+  width: 100%;
+  max-width: 520px;
+}
+
+.about-modal-card {
+  position: relative;
+  background: var(--white);
+  border-radius: 20px;
+  padding: 40px 36px 32px;
+  max-width: 520px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  text-align: center;
+}
+
+.about-close-x {
+  border: 0;
+  background: transparent;
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  font-size: 1.5rem;
+  color: var(--navy);
+  line-height: 1;
+}
+
+.about-modal-title {
+  margin-top: 1rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.about-created-by {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.about-creator-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  background: rgba(21, 101, 192, 0.12);
+  color: var(--blue);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+#aboutTriggerBtn {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 998;
+  width: 52px;
+  height: 52px;
+  border: none;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+  box-shadow: 0 4px 16px rgba(21, 101, 192, 0.35);
+  font-size: 1.1rem;
+  transition: transform 0.2s ease;
+}
+
+#aboutTriggerBtn:hover { transform: scale(1.1); }
+#aboutTriggerBtn.footer-overlap { opacity: 0; pointer-events: none; }
+
+@media (max-width: 768px) {
+  .about-modal-card {
+    width: 90vw;
+    padding: 32px 20px 24px;
+  }
 }
