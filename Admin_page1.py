@@ -474,6 +474,9 @@ def save_db(key, data):
                             cur.execute(f"INSERT INTO `{table}` ({col_sql}) VALUES ({placeholders})", values)
                     elif isinstance(data, list):
                         for item in data:
+                            if key == "categories":
+                                if not item or not str(item).strip():
+                                    continue  # skip empty entries
                             if isinstance(item, dict):
                                 insert_cols = [c for c in writable_cols if c in item]
                                 if not insert_cols:
