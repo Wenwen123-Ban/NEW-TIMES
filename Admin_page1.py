@@ -1041,16 +1041,21 @@ def run_auto_sync_engine():
             continue
 
     # 2. Sync Recovery Tickets (Cleanup expired)
-    cleaned_tickets = []
-    for t in tickets:
-        try:
-            if datetime.strptime(str(t.get("expiry", "")).strip(), "%Y-%m-%d %H:%M:%S") > now:
-                cleaned_tickets.append(t)
-        except Exception:
-            continue
+    if isinstance(tickets, list) and tickets:
+        initial_tickets = len(tickets)
 
-    if len(cleaned_tickets) != len(tickets):
-        save_db("tickets", cleaned_tickets)
+        def _safe_ticket_valid(t):
+            try:
+                exp = t.get("expiry", "") if isinstance(t, dict) else ""
+                if not exp:
+                    return False
+                return datetime.strptime(str(exp), "%Y-%m-%d %H:%M:%S") > now
+            except Exception:
+                return False
+
+        tickets = [t for t in tickets if _safe_ticket_valid(t)]
+        if len(tickets) != initial_tickets:
+            save_db("tickets", tickets)
 
     if changes_made:
         save_db("books", books)
@@ -1871,10 +1876,10 @@ def api_process_trans():
             normalize = lambda value: str(value or "").strip().lower()
 
             for b in books:
-                if b["book_no"] == b_no:
+                if b.get("book_no") == b_no:
                     b["status"] = "Available"
             for t in transactions:
-                if t["book_no"] != b_no or normalize(t.get("status")) not in ["reserved", "borrowed"]:
+                if t.get("book_no") != b_no or normalize(t.get("status")) not in ["reserved", "borrowed"]:
                     continue
 
                 tx_request_id = str(t.get("request_id", "")).strip()
@@ -1925,7 +1930,7 @@ def api_process_trans():
 
         # LOGIC 2: BORROW (Restored for Tablet)
         elif action == "borrow":
-            target_book = next((b for b in books if b["book_no"] == b_no), None)
+            target_book = next((b for b in books if b.get("book_no") == b_no), None)
             return_due_date = str(data.get("return_due_date", "")).strip()
             return_date_status = _get_date_restriction_status(return_due_date)
             if return_date_status.get("restricted"):
@@ -1973,7 +1978,7 @@ def api_process_trans():
                 chosen_school_id = str(reserved_transaction.get("school_id", "")).strip().lower()
 
                 for t in transactions:
-                    if t["book_no"] == b_no and t["status"] == "Reserved":
+                    if t.get("book_no") == b_no and t.get("status") == "Reserved":
                         t_school_id = str(t.get("school_id", "")).strip().lower()
                         if t_school_id == chosen_school_id:
                             t["status"] = "Converted"
