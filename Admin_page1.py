@@ -8,6 +8,7 @@ import random  # REQUIRED for Ticket Codes
 import re
 import string  # REQUIRED for Ticket Codes
 import threading
+import pymysql
 from flask import (
     Flask,
     render_template,
@@ -51,22 +52,32 @@ if not os.path.exists(LANDING_UPLOAD_FOLDER):
     os.makedirs(LANDING_UPLOAD_FOLDER)
     logger.info(f"SYSTEM INIT: Created landing uploads storage at ./{LANDING_UPLOAD_FOLDER}")
 
-# Database Map: Full restoration of all required DBs
-DB_FILES = {
-    "books": "books.json",
-    "admins": "admins.json",
-    "users": "users.json",
-    "transactions": "transactions.json",
-    "config": "system_config.json",
-    "tickets": "tickets.json",  # Password Recovery Registry
-    "categories": "categories.json",
-    "date_restricted": "Date_Restricted.json",
-    "reservation_transactions": "reservation_transaction.json",
-    "admin_approval_record": "Admin_approval_record.json",
-    "registration_requests": "registration_requests.json",
-    "log_rec": "log_rec.json",
-    "home_cards": "home_cards.json",
-    "news_posts": "news_posts.json",
+def get_db_connection():
+    return pymysql.connect(
+        host='localhost',
+        user='root',
+        password='',
+        database='lbas_db',
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+
+DB_TABLES = {
+    "books": "books",
+    "admins": "admins",
+    "users": "users",
+    "transactions": "transactions",
+    "categories": "categories",
+    "reservation_transactions": "reservation_transactions",
+    "tickets": "tickets",
+    "config": "system_config",
+    "log_rec": "log_rec",
+    "home_cards": "home_cards",
+    "news_posts": "news_posts",
+    "registration_requests": "registration_requests",
+    "date_restricted": "date_restricted",
+    "admin_approval_record": "admin_approval_record",
 }
 
 ACTIVE_SESSIONS = {}
@@ -235,26 +246,27 @@ def initialize_system():
         )
         with open(default_path, "wb") as f:
             f.write(blank)
-    for key, file_path in DB_FILES.items():
-        if not os.path.exists(file_path):
-            if key == "config":
-                initial_data = {
-                    "system_version": "7.2 Beta",
-                    "last_reboot": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                }
-            elif key == "categories":
-                initial_data = ["General", "Mathematics", "Science", "Literature"]
-            elif key == "date_restricted":
-                initial_data = {}
-            elif key == "log_rec":
-                initial_data = {
-                    "month": datetime.now().strftime("%Y-%m"),
-                    "events": [],
-                }
-            else:
-                initial_data = []
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(initial_data, f, indent=4)
+    # Ensure MySQL-backed stores have default bootstrap records.
+    if not get_db("config"):
+        save_db(
+            "config",
+            {
+                "system_version": "7.2 Beta",
+                "last_reboot": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            },
+        )
+    if not get_db("categories"):
+        save_db("categories", ["General", "Mathematics", "Science", "Literature"])
+    if not get_db("date_restricted"):
+        save_db("date_restricted", {})
+    if not get_db("log_rec"):
+        save_db("log_rec", {"month": datetime.now().strftime("%Y-%m"), "events": []})
+    if not get_db("home_cards"):
+        save_db("home_cards", [])
+    if not get_db("news_posts"):
+        save_db("news_posts", [])
+    if not get_db("registration_requests"):
+        save_db("registration_requests", [])
 
     # Remove legacy feedback file if it exists.
     if os.path.exists("ratings.json"):
@@ -326,23 +338,162 @@ def initialize_system():
         save_db("news_posts", normalized_news)
 
 
+def _json_load_if_needed(value):
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return value
+        try:
+            return json.loads(raw)
+        except Exception:
+            return value
+    return value
+
+
+def _get_table_columns(conn, table):
+    with conn.cursor() as cur:
+        cur.execute(f"SHOW COLUMNS FROM `{table}`")
+        return [row["Field"] for row in cur.fetchall()]
+
+
 def get_db(key):
+    default = {} if key in {"config", "log_rec", "date_restricted"} else []
+    table = DB_TABLES.get(key)
+    if not table:
+        return default
+
     try:
-        if not os.path.exists(DB_FILES[key]):
-            return {} if key == "config" else []
-        with open(DB_FILES[key], "r", encoding="utf-8") as f:
-            return json.load(f)
+        conn = get_db_connection()
+        with conn:
+            cols = _get_table_columns(conn, table)
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT * FROM `{table}`")
+                rows = cur.fetchall()
+
+        if key == "categories":
+            if not rows:
+                return []
+            if len(cols) == 1:
+                return [row.get(cols[0]) for row in rows if row.get(cols[0]) is not None]
+            name_col = "name" if "name" in cols else cols[0]
+            return [row.get(name_col) for row in rows if row.get(name_col)]
+
+        if key == "config":
+            if not rows:
+                return {}
+            if "config_key" in cols and "config_value" in cols:
+                return {
+                    str(row.get("config_key")): _json_load_if_needed(row.get("config_value"))
+                    for row in rows
+                    if row.get("config_key") is not None
+                }
+            if len(rows) == 1:
+                row = dict(rows[0])
+                row.pop("id", None)
+                return row
+            blob_col = "data" if "data" in cols else ("json_data" if "json_data" in cols else None)
+            if blob_col:
+                return _json_load_if_needed(rows[0].get(blob_col)) if rows else {}
+            return dict(rows[0])
+
+        if key in {"log_rec", "date_restricted"}:
+            if not rows:
+                return {}
+            row = dict(rows[0])
+            row.pop("id", None)
+            if "data" in row:
+                return _json_load_if_needed(row.get("data")) or {}
+            if "json_data" in row:
+                return _json_load_if_needed(row.get("json_data")) or {}
+            return row
+
+        processed = []
+        for row in rows:
+            clean = {}
+            for k, v in row.items():
+                clean[k] = _json_load_if_needed(v)
+            processed.append(clean)
+        return processed
     except Exception as e:
         logger.error(f"DB READ ERROR ({key}): {e}")
-        return {} if key == "config" else []
+        return default
 
 
 def save_db(key, data):
-    try:
-        with open(DB_FILES[key], "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"DB WRITE ERROR ({key}): {e}")
+    table = DB_TABLES.get(key)
+    if not table:
+        return
+
+    with _db_write_lock:
+        try:
+            conn = get_db_connection()
+            with conn:
+                cols = _get_table_columns(conn, table)
+                auto_cols = {"id", "ID"}
+                writable_cols = [c for c in cols if c not in auto_cols]
+
+                with conn.cursor() as cur:
+                    if key == "config" and "config_key" in cols and "config_value" in cols:
+                        cur.execute(f"TRUNCATE TABLE `{table}`")
+                        payload = data if isinstance(data, dict) else {}
+                        for ckey, cval in payload.items():
+                            cur.execute(
+                                f"INSERT INTO `{table}` (`config_key`, `config_value`) VALUES (%s, %s)",
+                                (str(ckey), json.dumps(cval, ensure_ascii=False) if isinstance(cval, (dict, list)) else str(cval)),
+                            )
+                        conn.commit()
+                        return
+
+                    if key in {"log_rec", "date_restricted"} and any(c in cols for c in ["data", "json_data"]):
+                        blob_col = "data" if "data" in cols else "json_data"
+                        cur.execute(f"TRUNCATE TABLE `{table}`")
+                        cur.execute(
+                            f"INSERT INTO `{table}` (`{blob_col}`) VALUES (%s)",
+                            (json.dumps(data if isinstance(data, dict) else {}, ensure_ascii=False),),
+                        )
+                        conn.commit()
+                        return
+
+                    cur.execute(f"TRUNCATE TABLE `{table}`")
+
+                    if isinstance(data, dict):
+                        row_data = data
+                        insert_cols = [c for c in writable_cols if c in row_data]
+                        if not insert_cols and len(writable_cols) == 1:
+                            insert_cols = [writable_cols[0]]
+                            row_data = {writable_cols[0]: json.dumps(data, ensure_ascii=False)}
+                        if insert_cols:
+                            placeholders = ", ".join(["%s"] * len(insert_cols))
+                            col_sql = ", ".join([f"`{c}`" for c in insert_cols])
+                            values = [
+                                json.dumps(row_data.get(c), ensure_ascii=False) if isinstance(row_data.get(c), (dict, list)) else row_data.get(c)
+                                for c in insert_cols
+                            ]
+                            cur.execute(f"INSERT INTO `{table}` ({col_sql}) VALUES ({placeholders})", values)
+                    elif isinstance(data, list):
+                        for item in data:
+                            if isinstance(item, dict):
+                                insert_cols = [c for c in writable_cols if c in item]
+                                if not insert_cols:
+                                    continue
+                                placeholders = ", ".join(["%s"] * len(insert_cols))
+                                col_sql = ", ".join([f"`{c}`" for c in insert_cols])
+                                values = [
+                                    json.dumps(item.get(c), ensure_ascii=False) if isinstance(item.get(c), (dict, list)) else item.get(c)
+                                    for c in insert_cols
+                                ]
+                                cur.execute(f"INSERT INTO `{table}` ({col_sql}) VALUES ({placeholders})", values)
+                            else:
+                                if len(writable_cols) == 1:
+                                    cur.execute(
+                                        f"INSERT INTO `{table}` (`{writable_cols[0]}`) VALUES (%s)",
+                                        (item,),
+                                    )
+                    conn.commit()
+        except Exception as e:
+            logger.error(f"DB WRITE ERROR ({key}): {e}")
 
 
 def _current_month_key():
