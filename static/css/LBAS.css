@@ -1,10 +1,21 @@
-      :root {
-        --primary: #0f172a;
+            :root {
+        --navy: #0a1628;
+        --blue: #1565c0;
+        --blue-mid: #1976d2;
+        --blue-light: #e3f0ff;
+        --gold: #f0b429;
+        --gold-light: #fef3c7;
+        --white: #ffffff;
+        --gray: #f4f6fb;
+        --text: #1a2340;
+        --muted: #6b7a99;
+
+--primary: #0f172a;
         --accent: #38bdf8;
         --success: #10b981;
         --danger: #ef4444;
         --warning: #f59e0b;
-        --text-primary-contrast: #ffffff;
+        --text-primary-contrast: var(--white);
         --text-highlight: #ffd54f;
         --text-muted-contrast: rgba(255, 255, 255, 0.75);
         --glass-strong: rgba(0, 0, 0, 0.65);
@@ -278,7 +289,7 @@
       }
       .tag-available {
         background: #4caf50;
-        color: #ffffff;
+        color: var(--white);
       }
       .tag-reserved {
         background: #ffb300;
@@ -382,7 +393,7 @@
 
       .reservation-card {
         background: #1f1f1f;
-        color: #ffffff;
+        color: var(--white);
         border-radius: 16px;
         padding: 16px;
         border: 1px solid rgba(255, 255, 255, 0.22);
@@ -680,7 +691,7 @@
       .system-title h1 {
         margin: 0;
         font-weight: 600;
-        color: #ffffff;
+        color: var(--white);
       }
 
       /* ===== FOOTER STYLE ===== */

@@ -85,10 +85,17 @@
           <label class="small fw-bold ms-2">Book Title</label>
           <input type="text" id="reserveBookTitle" class="form-control rounded-pill bg-light border-0 px-3" readonly />
         </div>
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">Date of Pickup</label>
-          <input type="date" id="reservePickupSchedule" class="form-control rounded-pill bg-light border-0 px-3" />
+        <div class="d-flex gap-2 mb-3">
+          <div style="flex:1">
+            <label class="small fw-bold ms-2">Pickup Date</label>
+            <input type="date" id="reservePickupSchedule" class="form-control rounded-pill bg-light border-0 px-3"/>
+          </div>
+          <div style="flex:1">
+            <label class="small fw-bold ms-2">Pickup Time</label>
+            <input type="time" id="reservePickupTime" class="form-control rounded-pill bg-light border-0 px-3" min="07:00" max="17:00"/>
+          </div>
         </div>
+        <small class="text-muted ms-2 d-block mb-3">Library hours: 7:00 AM – 5:00 PM</small>
         <div class="mb-4">
           <label class="small fw-bold ms-2">Request ID (Auto Generated)</label>
           <input type="text" id="reserveRequestID" class="form-control rounded-pill bg-light border-0 px-3" readonly />

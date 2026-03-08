@@ -127,6 +127,10 @@ let currentID = null;
           title: transaction.title || book.title || "Unknown Title",
           status: transaction.status,
           expiry: expiryDate ? expiryDate.toISOString() : null,
+          pickup_schedule: transaction.pickup_schedule || "",
+          queue_position: transaction.queue_position,
+          queue_total: transaction.queue_total,
+          same_slot_conflict: !!transaction.same_slot_conflict,
         };
       }
 
@@ -189,7 +193,7 @@ let currentID = null;
               const status = getNormalizedStatus(transaction);
               return (
                 getTransactionSchoolId(transaction) === key &&
-                (status === "reserved" || status === "borrowed" || status === "unavailable")
+                (status === "reserved" || status === "borrowed" || status === "unavailable" || status === "missed")
               );
             },
           )
@@ -197,6 +201,17 @@ let currentID = null;
 
         userActiveLeases[key] = leases;
         return cleanupExpiredLeasesForUser(schoolID);
+      }
+
+      function formatPickupDateTime(schedule) {
+        if (!schedule) return "Not set";
+        const parts = schedule.split(" ");
+        const date = parts[0] || "";
+        if (parts.length < 2) return date;
+        const [h, m] = parts[1].split(":").map(Number);
+        const period = h >= 12 ? "PM" : "AM";
+        const hour12 = h % 12 || 12;
+        return `${date} at ${hour12}:${String(m).padStart(2, "0")} ${period}`;
       }
 
       function renderActiveLeases() {
@@ -226,11 +241,21 @@ let currentID = null;
                   <div>
                     <div class="fw-bold">${lease.title}</div>
                     <code class="small fw-bold">${lease.book_no}</code><br>
-                    <span class="badge ${getNormalizedStatus(lease) === "reserved" ? "status-badge" : "bg-success"}">${lease.status}</span>
+                    <span class="badge ${getNormalizedStatus(lease) === "reserved" ? "status-badge" : getNormalizedStatus(lease) === "missed" ? "bg-danger" : "bg-success"}">${lease.status}</span>
                   </div>
                   <div class="text-end">
-                    ${getNormalizedStatus(lease) === "reserved" ? `<span class="small fw-bold text-warning d-block">Awaiting pickup</span>` : getNormalizedStatus(lease) === "unavailable" ? `<span class="small fw-bold text-danger d-block">Book is no longer available (borrowed by another user)</span>` : `<span class="timer small fw-bold d-block" data-expiry="${lease.expiry}" data-status="${lease.status}" data-book-no="${lease.book_no}">Calculating...</span>`}
-                    ${["reserved","unavailable"].includes(getNormalizedStatus(lease)) ? `<button class="btn btn-sm btn-outline-danger rounded-pill mt-1 cancel-reservation-btn" onclick="cancelReservation('${lease.book_no}')">Remove Reservation List</button>` : ""}
+                    ${getNormalizedStatus(lease) === "reserved"
+                      ? (Number(lease.queue_position) > 1
+                        ? `<span class="small fw-bold text-muted d-block">In queue — position #${lease.queue_position} of ${lease.queue_total || lease.queue_position}</span><span class="small text-muted d-block">Your slot: ${formatPickupDateTime(lease.pickup_schedule)}</span>`
+                        : lease.same_slot_conflict
+                          ? `<span class="small fw-bold text-warning d-block">Awaiting pickup — same slot as another user. First to arrive gets the book!</span><span class="small text-muted d-block">Pickup slot: ${formatPickupDateTime(lease.pickup_schedule)}</span>`
+                          : `<span class="small fw-bold text-warning d-block">Awaiting pickup</span><span class="small text-muted d-block">Pickup slot: ${formatPickupDateTime(lease.pickup_schedule)}</span>`)
+                      : getNormalizedStatus(lease) === "missed"
+                        ? `<span class="small fw-bold text-danger d-block">Failed to Pick Up</span>`
+                        : getNormalizedStatus(lease) === "unavailable"
+                          ? `<span class="small fw-bold text-danger d-block">Book is no longer available (borrowed by another user)</span>`
+                          : `<span class="timer small fw-bold d-block" data-expiry="${lease.expiry}" data-status="${lease.status}" data-book-no="${lease.book_no}">Calculating...</span>`}
+                    ${["reserved","unavailable","missed"].includes(getNormalizedStatus(lease)) ? `<button class="btn btn-sm btn-outline-danger rounded-pill mt-1 cancel-reservation-btn" onclick="cancelReservation('${lease.book_no}')">Remove Reservation List</button>` : ""}
                   </div>
                 </div>`,
             )
@@ -749,6 +774,8 @@ let currentID = null;
         document.getElementById("reserveBookTitle").value = book.title || "Unknown Title";
         document.getElementById("reserveRequestID").value = `REQ-${Date.now().toString(36).toUpperCase()}`;
         document.getElementById("reservePickupSchedule").value = "";
+        const reserveTimeField = document.getElementById("reservePickupTime");
+        if (reserveTimeField) reserveTimeField.value = "";
         document.getElementById("reservePickupSchedule").onchange = async (event) => {
           const selected = event.target.value;
           const status = await checkDateRestriction(selected);
@@ -807,8 +834,11 @@ let currentID = null;
         const borrowerName = document
           .getElementById("reserveBorrowerName")
           .value.trim();
-        const pickupSchedule = document
+        const pickupDate = document
           .getElementById("reservePickupSchedule")
+          .value.trim();
+        const pickupTime = document
+          .getElementById("reservePickupTime")
           .value.trim();
         const bookCode = document.getElementById("reserveBookCode").value.trim();
         const bookTitle = document.getElementById("reserveBookTitle").value.trim();
@@ -816,10 +846,24 @@ let currentID = null;
         const contactType = (document.getElementById("reserveContactType")?.value || "phone").trim();
         const contactValue = document.getElementById("reservePhoneNumber").value.trim();
 
-        if (!borrowerName || !pickupSchedule) {
-          alert("Please provide pickup date.");
+        if (!borrowerName) {
+          alert("Please provide borrower name.");
           return;
         }
+        if (!pickupDate) {
+          alert("Please provide a pickup date.");
+          return;
+        }
+        if (!pickupTime) {
+          alert("Please provide a pickup time.");
+          return;
+        }
+        const [hours] = pickupTime.split(":").map(Number);
+        if (hours < 7 || hours >= 17) {
+          alert("Pickup time must be within library hours: 7:00 AM – 5:00 PM");
+          return;
+        }
+        const pickupSchedule = `${pickupDate} ${pickupTime}`;
         if (!contactType || !contactValue) {
           alert("Must fill the credentials!");
           return;
@@ -834,7 +878,7 @@ let currentID = null;
         }
         if (pendingReservationRequests.has(no)) return;
 
-        const dateStatus = await checkDateRestriction(pickupSchedule);
+        const dateStatus = await checkDateRestriction(pickupDate);
         if (dateStatus.restricted) {
           alert(dateStatus.reason || "Selected pickup date is restricted.");
           return;
@@ -1087,6 +1131,10 @@ let currentID = null;
         document.getElementById(id).style.display = show ? "flex" : "none";
         if (id === "registerModal" && !show) {
           resetRegistrationForm();
+        }
+        if (id === "reserveModal" && !show) {
+          const timeField = document.getElementById("reservePickupTime");
+          if (timeField) timeField.value = "";
         }
       }
 
