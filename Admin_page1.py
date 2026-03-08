@@ -1918,8 +1918,10 @@ def api_process_trans():
             if approval_changed:
                 save_db("admin_approval_record", approval_log)
 
-            if target_request_id and not matched_transaction:
-                return jsonify({"success": False, "message": "Matching borrowed record not found"}), 404
+            # Always update book status regardless of transaction match
+            save_db("books", books)
+            save_db("transactions", transactions)
+            return jsonify({"success": True, "matched": matched_transaction})
 
         # LOGIC 2: BORROW (Restored for Tablet)
         elif action == "borrow":
