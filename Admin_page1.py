@@ -32,6 +32,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("LBAS_Command_Center")
 
+BOOK_STATUS_ALLOWED = {"available", "borrowed", "reserved", "unavailable"}
+TRANSACTION_ACTIVE_BLOCKING_STATUS = "borrowed"
+BORROW_LIMIT_PER_USER = 5
+
 _db_write_lock = threading.RLock()
 PROFILE_FOLDER = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -223,6 +227,37 @@ def create_account_entry(target_db_key, category_name, name, school_id, password
     return True, saved_photo
 
 
+
+
+def repair_cloudfared_filesystem():
+    """Cleanup accidental cloudfared filesystem artifacts and invalid filenames."""
+    root = os.path.dirname(os.path.abspath(__file__))
+    cleaned = []
+    cloudfared_dir = os.path.join(root, "cloudfared")
+    if os.path.isdir(cloudfared_dir):
+        for entry in os.listdir(cloudfared_dir):
+            path = os.path.join(cloudfared_dir, entry)
+            if os.path.isfile(path):
+                os.remove(path)
+                cleaned.append(path)
+        try:
+            if not os.listdir(cloudfared_dir):
+                os.rmdir(cloudfared_dir)
+        except OSError:
+            pass
+
+    invalid_patterns = ("http://", "https://", "cloudflared", "ERR_")
+    for entry in os.listdir(root):
+        path = os.path.join(root, entry)
+        if not os.path.isfile(path):
+            continue
+        if any(token in entry for token in invalid_patterns):
+            os.remove(path)
+            cleaned.append(path)
+    if cleaned:
+        logger.info(f"Filesystem repair cleaned {len(cleaned)} artifact(s).")
+    return {"cleaned_count": len(cleaned)}
+
 def initialize_system():
     logger.info("SYSTEM INIT: verifying database integrity...")
     ensure_creators_profile_db()
@@ -294,7 +329,7 @@ def initialize_system():
             continue
         status = str(book.get("status", "")).strip()
         if not status:
-            book["status"] = "Available"
+            book["status"] = "available"
             books_changed = True
     if books_changed:
         save_db("books", books)
@@ -328,6 +363,9 @@ def initialize_system():
     normalized_news = _normalize_news_posts(raw_news_posts)
     if raw_news_posts != normalized_news:
         save_db("news_posts", normalized_news)
+
+    repair_cloudfared_filesystem()
+    repair_borrowing_validation_data()
 
 
 def get_db(key):
@@ -453,6 +491,78 @@ def _normalize_date_only(value):
         except ValueError:
             continue
     return ""
+
+
+def normalize_status(value):
+    return str(value or "").strip().lower()
+
+
+def _normalize_book_status(value):
+    status = normalize_status(value)
+    if status in BOOK_STATUS_ALLOWED:
+        return status
+    if status in {"", "returned", "cancelled", "expired", "converted", "missed"}:
+        return "available"
+    return "unavailable"
+
+
+def _normalize_transaction_status(value):
+    return normalize_status(value)
+
+
+def log_borrow_block(reason, **ctx):
+    details = " ".join(f"{k}={v}" for k, v in ctx.items() if v is not None and v != "")
+    logger.warning(f"BORROW BLOCKED: reason={reason}{(' ' + details) if details else ''}")
+
+
+def repair_borrowing_validation_data():
+    """Normalize status values and remove transactions that reference missing books."""
+    books = get_db("books")
+    transactions = get_db("transactions")
+    if not isinstance(books, list):
+        books = []
+    if not isinstance(transactions, list):
+        transactions = []
+
+    changed_books = False
+    valid_book_nos = set()
+    for b in books:
+        if not isinstance(b, dict):
+            continue
+        book_no = str(b.get("book_no", "")).strip()
+        if book_no:
+            valid_book_nos.add(book_no)
+        normalized = _normalize_book_status(b.get("status"))
+        if b.get("status") != normalized:
+            b["status"] = normalized
+            changed_books = True
+
+    cleaned_transactions = []
+    changed_transactions = False
+    for tx in transactions:
+        if not isinstance(tx, dict):
+            changed_transactions = True
+            continue
+        tx_book_no = str(tx.get("book_no") or tx.get("book_id") or "").strip()
+        if not tx_book_no or tx_book_no not in valid_book_nos:
+            changed_transactions = True
+            continue
+        normalized = _normalize_transaction_status(tx.get("status"))
+        if tx.get("status") != normalized:
+            tx["status"] = normalized
+            changed_transactions = True
+        cleaned_transactions.append(tx)
+
+    if changed_books:
+        save_db("books", books)
+    if changed_transactions:
+        save_db("transactions", cleaned_transactions)
+
+    return {
+        "books_updated": changed_books,
+        "transactions_updated": changed_transactions,
+        "transactions_total": len(cleaned_transactions),
+    }
 
 
 def _ph_holiday_map(year):
@@ -621,14 +731,14 @@ def promote_next_in_queue(book_no):
     if not queue:
         for b in books:
             if b.get("book_no") == book_no:
-                b["status"] = "Available"
+                b["status"] = "available"
         save_db("books", books)
         return
 
     queue.sort(key=_pickup_sort_key)
     for b in books:
         if b.get("book_no") == book_no:
-            b["status"] = "Reserved"
+            b["status"] = "reserved"
     save_db("books", books)
 
 
@@ -676,7 +786,7 @@ def check_missed_pickups():
         )
 
         if not already_borrowed:
-            tx["status"] = "Missed"
+            tx["status"] = "missed"
             tx["missed_at"] = now.strftime("%Y-%m-%d %H:%M")
             affected_books.add(tx.get("book_no"))
             changed = True
@@ -705,17 +815,17 @@ def run_auto_sync_engine():
     for t in transactions:
         if not isinstance(t, dict):
             continue
-        if str(t.get("status", "")).strip() != "Reserved":
+        if str(t.get("status", "")).strip() != "reserved":
             continue
         expiry_value = str(t.get("expiry", "")).strip()
         if not expiry_value:
             continue
         try:
             if now > datetime.strptime(expiry_value, "%Y-%m-%d %H:%M"):
-                t["status"] = "Expired"
+                t["status"] = "expired"
                 for b in books:
                     if isinstance(b, dict) and b.get("book_no") == t.get("book_no"):
-                        b["status"] = "Available"
+                        b["status"] = "available"
                         changes_made = True
         except ValueError:
             continue
@@ -821,7 +931,7 @@ def bulk_register():
                         {
                             "book_no": b_no,
                             "title": title,
-                            "status": "Available",
+                            "status": "available",
                             "category": category,
                         }
                     )
@@ -1224,7 +1334,7 @@ def api_get_books():
     for book in books:
         if not isinstance(book, dict):
             continue
-        status = str(book.get("status", "")).strip() or "Available"
+        status = str(book.get("status", "")).strip() or "available"
         if status != book.get("status"):
             book["status"] = status
             changed = True
@@ -1535,12 +1645,12 @@ def api_cancel_reservation():
     if target_transaction is None:
         return jsonify({"success": False, "message": "Active reservation not found"}), 404
 
-    target_transaction["status"] = "Cancelled"
+    target_transaction["status"] = "cancelled"
     target_transaction["cancelled_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for b in books:
-        if b.get("book_no") == b_no and b.get("status") == "Reserved":
-            b["status"] = "Available"
+        if b.get("book_no") == b_no and b.get("status") == "reserved":
+            b["status"] = "available"
 
     save_db("transactions", transactions)
     save_db("books", books)
@@ -1549,16 +1659,13 @@ def api_cancel_reservation():
 
 @app.route("/api/process_transaction", methods=["POST"])
 def api_process_trans():
-    """
-    MASTER TRANSACTION HANDLER
-    Restored: Now handles 'borrow' logic for Kiosk/Tablet.
-    """
+    """MASTER TRANSACTION HANDLER for borrow/return operations."""
     if not require_auth():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
 
     data = request.json or {}
-    b_no = data.get("book_no")
-    action = data.get("action")  # 'borrow' or 'return'
+    b_no = str(data.get("book_no") or "").strip()
+    action = str(data.get("action") or "").strip().lower()
     s_id = str(data.get("school_id", "")).strip().lower()
     borrower_name = str(data.get("borrower_name") or "").strip()
     if not borrower_name:
@@ -1568,7 +1675,6 @@ def api_process_trans():
     with _db_write_lock:
         books = get_db("books")
         transactions = get_db("transactions")
-        normalized_book_no = str(b_no or "").strip()
 
         def _tx_book_ref(tx):
             return str(tx.get("book_no") or tx.get("book_id") or "").strip()
@@ -1578,14 +1684,13 @@ def api_process_trans():
             target_request_id = str(data.get("request_id", "")).strip()
             target_school_id = str(data.get("school_id", "")).strip().lower()
             matched_transaction = False
-            normalize = lambda value: str(value or "").strip().lower()
 
             for b in books:
-                if b.get("book_no") == b_no:
-                    b["status"] = "Available"
+                if str(b.get("book_no", "")).strip() == b_no:
+                    b["status"] = "available"
             for t in transactions:
-                tx_status = normalize(t.get("status"))
-                if _tx_book_ref(t) != normalized_book_no or tx_status not in ["", "reserved", "borrowed", "unavailable"]:
+                tx_status = normalize_status(t.get("status"))
+                if _tx_book_ref(t) != b_no or tx_status not in ["", "reserved", "borrowed", "unavailable"]:
                     continue
 
                 tx_request_id = str(t.get("request_id", "")).strip()
@@ -1598,10 +1703,10 @@ def api_process_trans():
                 if not target_request_id and target_school_id and not school_id_match:
                     continue
 
-                if normalize(t.get("status")) == "borrowed":
+                if tx_status == "borrowed":
                     matched_transaction = True
 
-                t["status"] = "Returned"
+                t["status"] = "returned"
                 t["return_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
             approval_log = get_db("admin_approval_record")
@@ -1609,7 +1714,7 @@ def api_process_trans():
                 approval_log = []
             approval_changed = False
             for row in approval_log:
-                if row.get("book_no") != b_no or normalize(row.get("status")) != "borrowed":
+                if str(row.get("book_no", "")).strip() != b_no or normalize_status(row.get("status")) != "borrowed":
                     continue
 
                 row_request_id = str(row.get("request_id", "")).strip()
@@ -1622,113 +1727,105 @@ def api_process_trans():
                 if not target_request_id and target_school_id and not school_id_match:
                     continue
 
-                row["status"] = "Returned"
+                row["status"] = "returned"
                 row["return_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                 approval_changed = True
 
             if approval_changed:
                 save_db("admin_approval_record", approval_log)
 
-            # Always update book status regardless of transaction match
             save_db("books", books)
             save_db("transactions", transactions)
             return jsonify({"success": True, "matched": matched_transaction})
 
-        # LOGIC 2: BORROW (Restored for Tablet)
-        elif action == "borrow":
-            target_book = next((b for b in books if b.get("book_no") == b_no), None)
-            return_due_date = str(data.get("return_due_date", "")).strip()
-            return_date_status = _get_date_restriction_status(return_due_date)
-            if return_date_status.get("restricted"):
-                reason = return_date_status.get("reason") or "Selected return date is restricted."
-                return jsonify({"success": False, "message": reason}), 400
+        # LOGIC 2: BORROW
+        if action != "borrow":
+            return jsonify({"success": False, "message": "Invalid action"}), 400
 
-            reserved_candidates = [
-                t for t in transactions if t.get("book_no") == b_no and t.get("status") == "Reserved"
-            ]
+        repair_borrowing_validation_data()
+        books = get_db("books")
+        transactions = get_db("transactions")
 
-            def _reservation_sort_key(tx):
-                created_raw = str(tx.get("date") or "").strip()
-                try:
-                    created_dt = datetime.strptime(created_raw, "%Y-%m-%d %H:%M")
-                except ValueError:
-                    created_dt = datetime.max
-                return _pickup_sort_key(tx), created_dt
+        # check_user
+        if not s_id:
+            log_borrow_block("missing_school_id", book_no=b_no)
+            return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "missing_school_id"}), 400
+        user = find_any_user(s_id)
+        if not user:
+            log_borrow_block("user_not_found", book_no=b_no, school_id=s_id)
+            return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "user_not_found"}), 404
 
-            reserved_candidates.sort(key=_reservation_sort_key)
-            reserved_transaction = reserved_candidates[0] if reserved_candidates else None
+        # check_book_exists
+        target_book = next((b for b in books if str(b.get("book_no", "")).strip() == b_no), None)
+        if not target_book:
+            log_borrow_block("book_not_found", book_no=b_no, school_id=s_id)
+            return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "book_not_found"}), 404
 
-            if not s_id and reserved_transaction:
-                s_id = str(reserved_transaction.get("school_id", "")).strip().lower()
+        # date restriction
+        return_due_date = str(data.get("return_due_date", "")).strip()
+        return_date_status = _get_date_restriction_status(return_due_date)
+        if return_date_status.get("restricted"):
+            reason = return_date_status.get("reason") or "Selected return date is restricted."
+            log_borrow_block("return_date_restricted", book_no=b_no, school_id=s_id, return_due_date=return_due_date)
+            return jsonify({"success": False, "message": reason, "reason": "return_date_restricted"}), 400
 
-            if s_id:
-                selected = next(
-                    (
-                        tx
-                        for tx in reserved_candidates
-                        if str(tx.get("school_id", "")).strip().lower() == s_id
-                    ),
-                    None,
-                )
-                if selected:
-                    reserved_transaction = selected
+        # check_book_available
+        book_status = _normalize_book_status(target_book.get("status"))
+        target_book["status"] = book_status
+        if book_status != "available":
+            log_borrow_block("book_not_available", book_no=b_no, school_id=s_id, book_status=book_status)
+            return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "book_not_available", "book_status": book_status}), 409
 
-            pickup_schedule = str((reserved_transaction or {}).get("pickup_schedule", "")).strip()
-            if pickup_schedule and return_due_date and return_due_date < pickup_schedule.split(" ")[0]:
-                return jsonify({"success": False, "message": "You have picked backward! Pick a date forward!"}), 400
+        # check_transaction_conflict
+        for tx in transactions:
+            if _tx_book_ref(tx) != b_no:
+                continue
+            tx_status = _normalize_transaction_status(tx.get("status"))
+            tx["status"] = tx_status
+            if tx_status == TRANSACTION_ACTIVE_BLOCKING_STATUS:
+                log_borrow_block("existing_borrow_transaction", book_no=b_no, school_id=s_id, request_id=str(tx.get("request_id", "")).strip())
+                return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "existing_borrow_transaction"}), 409
 
-            can_borrow = target_book and target_book.get("status") != "Borrowed"
+        active_user_borrowed = sum(
+            1
+            for tx in transactions
+            if str(tx.get("school_id", "")).strip().lower() == s_id and _normalize_transaction_status(tx.get("status")) == "borrowed"
+        )
+        if active_user_borrowed >= BORROW_LIMIT_PER_USER:
+            log_borrow_block("borrow_limit_reached", book_no=b_no, school_id=s_id, borrowed_count=active_user_borrowed)
+            return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "borrow_limit_reached", "limit": BORROW_LIMIT_PER_USER}), 409
 
-            if can_borrow and reserved_transaction:
-                target_book["status"] = "Borrowed"
-                chosen_school_id = str(reserved_transaction.get("school_id", "")).strip().lower()
+        now = datetime.now()
+        try:
+            parsed_due_date = datetime.strptime(return_due_date, "%Y-%m-%d") if return_due_date else (now + timedelta(days=2))
+        except ValueError:
+            parsed_due_date = now + timedelta(days=2)
 
-                for t in transactions:
-                    if t.get("book_no") == b_no and t.get("status") == "Reserved":
-                        t_school_id = str(t.get("school_id", "")).strip().lower()
-                        if t_school_id == chosen_school_id:
-                            t["status"] = "Converted"
-                        else:
-                            pickup_at = datetime.now().strftime("%Y-%m-%d %H:%M")
-                            t["status"] = "Unavailable"
-                            t["unavailable_reason"] = "This book was borrowed by another user before your reserved pickup date."
-                            t["unavailable_at"] = pickup_at
-                            t["pickup_at"] = pickup_at
-                            t["borrowed_by"] = (reserved_transaction or {}).get("borrower_name", "") or borrower_name
+        # allow_borrow
+        target_book["status"] = "borrowed"
+        approved_record = {
+            "book_no": b_no,
+            "title": (target_book or {}).get("title", ""),
+            "school_id": s_id,
+            "status": "borrowed",
+            "date": now.strftime("%Y-%m-%d %H:%M"),
+            "expiry": parsed_due_date.strftime("%Y-%m-%d"),
+            "pickup_location": str(data.get("pickup_location", "")).strip(),
+            "pickup_schedule": str(data.get("pickup_schedule", "")).strip(),
+            "reservation_note": str(data.get("reservation_note", "")).strip(),
+            "borrower_name": borrower_name,
+            "phone_number": str(data.get("phone_number", "")).strip(),
+            "reserved_at": str(data.get("reserved_at", "")).strip(),
+            "request_id": str(data.get("request_id", "")).strip() or generate_request_id(),
+            "approved_by": str(data.get("approved_by", "")).strip() or "System Librarian",
+        }
+        transactions.append(approved_record)
 
-                now = datetime.now()
-                try:
-                    parsed_due_date = datetime.strptime(return_due_date, "%Y-%m-%d") if return_due_date else (now + timedelta(days=2))
-                except ValueError:
-                    parsed_due_date = now + timedelta(days=2)
-
-                approved_record = {
-                    "book_no": b_no,
-                    "title": (target_book or {}).get("title", ""),
-                    "school_id": chosen_school_id,
-                    "status": "Borrowed",
-                    "date": now.strftime("%Y-%m-%d %H:%M"),
-                    "expiry": parsed_due_date.strftime("%Y-%m-%d"),
-                    "pickup_location": (reserved_transaction or {}).get("pickup_location", ""),
-                    "pickup_schedule": (reserved_transaction or {}).get("pickup_schedule", ""),
-                    "reservation_note": (reserved_transaction or {}).get("reservation_note", ""),
-                    "borrower_name": (reserved_transaction or {}).get("borrower_name", "") or borrower_name,
-                    "phone_number": (reserved_transaction or {}).get("phone_number", ""),
-                    "reserved_at": (reserved_transaction or {}).get("date", ""),
-                    "request_id": (reserved_transaction or {}).get("request_id")
-                    or str(data.get("request_id", "")).strip()
-                    or generate_request_id(),
-                    "approved_by": str(data.get("approved_by", "")).strip() or "System Librarian",
-                }
-                transactions.append(approved_record)
-
-                approval_log = get_db("admin_approval_record")
-                if not isinstance(approval_log, list):
-                    approval_log = []
-                approval_log.append(approved_record)
-                save_db("admin_approval_record", approval_log)
-            else:
-                return jsonify({"success": False, "message": "Book Unavailable"}), 400
+        approval_log = get_db("admin_approval_record")
+        if not isinstance(approval_log, list):
+            approval_log = []
+        approval_log.append(dict(approved_record))
+        save_db("admin_approval_record", approval_log)
 
         save_db("books", books)
         save_db("transactions", transactions)
@@ -1793,13 +1890,13 @@ def api_reserve():
             return jsonify({"success": False, "status": "error", "message": "Reservation limit reached (5 max)."}), 400
 
         if str(target_book.get("status", "")).strip().lower() == "available":
-            target_book["status"] = "Reserved"
+            target_book["status"] = "reserved"
 
         reservation_payload = {
             "book_no": b_no,
             "title": target_book.get("title", ""),
             "school_id": s_id,
-            "status": "Reserved",
+            "status": "reserved",
             "date": now.strftime("%Y-%m-%d %H:%M"),
             "expiry": None,
             "borrower_name": borrower_name,
