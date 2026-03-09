@@ -1122,6 +1122,7 @@ let editModal;
         document.getElementById('borrowBookNo').value = bookNo;
         document.getElementById('borrowerName').value = transaction.borrower_name || '-';
         document.getElementById('borrowerId').value = transaction.school_id || '-';
+        document.getElementById('borrowSchoolId').value = transaction.school_id || '';
         document.getElementById('borrowerPhone').value = transaction.phone_number || '-';
         document.getElementById('borrowBookCode').value = transaction.book_no || '-';
         document.getElementById('borrowBookTitle').value = transaction.title || 'Unknown Title';
@@ -1154,7 +1155,7 @@ let editModal;
 
     async function submitBorrowForm() {
         const b_no = document.getElementById('borrowBookNo').value;
-        const school_id = (document.getElementById('borrowerId').value || '').trim().toLowerCase();
+        const school_id = (document.getElementById('borrowSchoolId').value || '').trim().toLowerCase();
         const borrower_name = (document.getElementById('borrowerName').value || '').trim();
         const return_due_date = document.getElementById('borrowReturnDate').value;
         const approved_by = document.getElementById('borrowApprovedBy').value;

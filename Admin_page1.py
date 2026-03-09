@@ -72,10 +72,65 @@ DB_FILES = {
     "log_rec": "log_rec.json",
     "home_cards": "home_cards.json",
     "news_posts": "news_posts.json",
+    "active_sessions": "active_sessions.json",
 }
 
-ACTIVE_SESSIONS = {}
-SESSION_TIMEOUT_HOURS = 2
+def _load_active_sessions():
+    # SESSIONS LOAD — Restores sessions from
+    # JSON file on startup so users don't lose
+    # their session after server restart
+    path = DB_FILES["active_sessions"]
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, dict):
+                now = datetime.now()
+                clean = {}
+                for uid, sess in raw.items():
+                    try:
+                        exp_str = sess.get("expires", "")
+                        exp = datetime.strptime(exp_str, "%Y-%m-%d %H:%M:%S")
+                        if exp > now:
+                            clean[uid] = {
+                                "token": sess.get("token", ""),
+                                "expires": exp,
+                            }
+                    except Exception:
+                        continue
+                return clean
+    except Exception:
+        pass
+    return {}
+
+
+ACTIVE_SESSIONS = _load_active_sessions()
+SESSION_TIMEOUT_HOURS = 24
+
+
+def _save_active_sessions():
+    # SESSIONS SAVE — Persists sessions to JSON
+    # Called after every login and logout
+    # Converts datetime to string for JSON
+    path = DB_FILES["active_sessions"]
+    serializable = {}
+    for uid, sess in ACTIVE_SESSIONS.items():
+        try:
+            exp = sess.get("expires")
+            exp_str = (
+                exp.strftime("%Y-%m-%d %H:%M:%S") if isinstance(exp, datetime) else str(exp or "")
+            )
+            serializable[uid] = {
+                "token": sess.get("token", ""),
+                "expires": exp_str,
+            }
+        except Exception:
+            continue
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Sessions save failed: {e}")
 
 
 def _normalize_auth_provider(user):
@@ -139,15 +194,36 @@ def require_auth():
 
 
 def require_admin_session():
+    # AUTH CHECK — Admin session validator
+    # Accepts EITHER Flask cookie session
+    # OR Authorization header token
+    # Needed because Cloudflare tunnel drops
+    # cookies; token header always works
+
     admin_id = str(session.get("admin_school_id", "")).strip().lower()
-    if not admin_id or not session.get("is_admin", False):
+    if admin_id and session.get("is_admin"):
+        profile = find_any_user(admin_id)
+        if profile and profile.get("is_staff"):
+            return admin_id
+
+    token = request.headers.get("Authorization", "").strip()
+    if not token:
         return None
 
-    admin_profile = find_any_user(admin_id)
-    if not admin_profile or not admin_profile.get("is_staff", False):
-        session.clear()
-        return None
-    return admin_id
+    for uid, sess in list(ACTIVE_SESSIONS.items()):
+        if not isinstance(sess, dict):
+            continue
+        if sess.get("token") != token:
+            continue
+        if datetime.now() >= sess.get("expires", datetime.min):
+            del ACTIVE_SESSIONS[uid]
+            _save_active_sessions()
+            continue
+        profile = find_any_user(uid)
+        if profile and profile.get("is_staff"):
+            return uid
+
+    return None
 
 
 def is_session_valid(user_id, token):
@@ -711,7 +787,7 @@ def find_any_user(s_id):
     return None
 
 
-register_auth_routes(app, find_any_user, ACTIVE_SESSIONS, SESSION_TIMEOUT_HOURS)
+register_auth_routes(app, find_any_user, ACTIVE_SESSIONS, SESSION_TIMEOUT_HOURS, _save_active_sessions)
 
 
 def is_mobile_request():
@@ -998,75 +1074,6 @@ def api_register_librarian():
     return jsonify({"success": True, "photo": payload})
 
 
-def api_register_request():
-    name = request.form.get("name")
-    school_id = str(request.form.get("school_id", "")).strip().lower()
-    password = request.form.get("password")
-    role = "student"
-    photo = request.files.get("photo")
-
-    if not name or not school_id or not password:
-        return jsonify({"success": False, "message": "Missing required fields"}), 400
-    if find_any_user(school_id):
-        return jsonify({"success": False, "message": "ID Exists"}), 400
-
-    requests = get_db("registration_requests")
-    if not isinstance(requests, list):
-        requests = []
-
-    pending_for_id = next(
-        (
-            row
-            for row in requests
-            if str(row.get("school_id", "")).strip().lower() == school_id
-            and str(row.get("status", "pending")).strip().lower() == "pending"
-        ),
-        None,
-    )
-    if pending_for_id:
-        return jsonify({"success": False, "message": "Existing pending request"}), 400
-
-    req_id = generate_request_id("REG")
-    saved_photo = save_profile_photo(photo, school_id)
-
-    requests.append(
-        {
-            "request_id": req_id,
-            "name": str(name).strip(),
-            "school_id": school_id,
-            "password": password,
-            "role": role,
-            "photo": saved_photo,
-            "status": "pending",
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        }
-    )
-    save_db("registration_requests", requests)
-    return jsonify({"success": True, "request_id": req_id})
-
-
-# NOTE:
-# `api/auth.py` also registers `/api/register_request` for the newer public
-# registration flow. Register this legacy handler only when that route is not
-# already present to avoid startup route collisions.
-if not any(
-    rule.rule == "/api/register_request" and "POST" in rule.methods
-    for rule in app.url_map.iter_rules()
-):
-    app.add_url_rule(
-        "/api/register_request",
-        view_func=api_register_request,
-        methods=["POST"],
-    )
-
-# Always expose the legacy contract on a dedicated endpoint.
-app.add_url_rule(
-    "/api/register_request_legacy",
-    view_func=api_register_request,
-    methods=["POST"],
-)
-
-
 @app.route("/api/admin/registration-requests")
 def api_admin_get_registration_requests():
     if not require_admin_session():
@@ -1131,8 +1138,11 @@ def api_admin_decide_registration_request(request_id):
             ),
             None,
         )
-        if account and target.get("photo"):
-            account["photo"] = target["photo"]
+        if account:
+            if target.get("photo"):
+                account["photo"] = target["photo"]
+            if target.get("email"):
+                account["email"] = target["email"]
             save_db(db_key, registry)
 
     target["status"] = "approved"
@@ -1275,6 +1285,7 @@ def api_login():
             "token": token,
             "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
         }
+        _save_active_sessions()
         record_system_event("login", s_id)
         return jsonify({"success": True, "token": token, "profile": user})
 
@@ -1292,6 +1303,7 @@ def api_login():
             "token": token,
             "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
         }
+        _save_active_sessions()
         if user.get("is_staff", False):
             session["is_admin"] = True
             session["admin_school_id"] = s_id
@@ -1307,6 +1319,7 @@ def api_login():
             "token": token,
             "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
         }
+        _save_active_sessions()
         if user.get("is_staff", False):
             session["is_admin"] = True
             session["admin_school_id"] = s_id
@@ -1326,6 +1339,7 @@ def api_logout():
     for user_id, active_session in list(ACTIVE_SESSIONS.items()):
         if isinstance(active_session, dict) and active_session.get("token") == token:
             del ACTIVE_SESSIONS[user_id]
+            _save_active_sessions()
             return jsonify({"success": True})
     return jsonify({"success": True})
 
