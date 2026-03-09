@@ -1154,13 +1154,18 @@ let editModal;
 
     async function submitBorrowForm() {
         const b_no = document.getElementById('borrowBookNo').value;
+        const school_id = (document.getElementById('borrowerId').value || '').trim().toLowerCase();
+        const borrower_name = (document.getElementById('borrowerName').value || '').trim();
         const return_due_date = document.getElementById('borrowReturnDate').value;
         const approved_by = document.getElementById('borrowApprovedBy').value;
         const request_id = document.getElementById('borrowRequestId').value;
         if (!return_due_date) return alert('Please set return date.');
         if (!validateBorrowReturnDateSelection()) return;
         try {
-            const res = await apiFetch('/api/process_transaction', { method: 'POST', body: JSON.stringify({ book_no: b_no, action: 'borrow', return_due_date, approved_by, request_id }) });
+            const res = await apiFetch('/api/process_transaction', {
+                method: 'POST',
+                body: JSON.stringify({ book_no: b_no, action: 'borrow', school_id, borrower_name, return_due_date, approved_by, request_id })
+            });
             const data = await res.json();
             if (!data.success) return alert(data.message || 'Unable to borrow book.');
             borrowModal.hide();
