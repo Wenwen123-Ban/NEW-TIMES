@@ -1,5 +1,5 @@
 (function () {
-  const state = { cards: [], news: [] };
+  const state = { cards: [], news: [], auth: null };
   const homeCardsGrid = document.getElementById('homeCardsGrid');
   const newsDesktopList = document.getElementById('newsDesktopList');
   const newsMobileStrip = document.getElementById('newsMobileStrip');
@@ -14,6 +14,32 @@
     toast.textContent = message;
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 1700);
+  }
+
+  function syncSessionUI() {
+    const toggle = document.getElementById('landingAccountMenuToggle');
+    const logoutBtn = document.getElementById('landingLogoutBtn');
+    if (toggle) toggle.textContent = state.auth?.profile?.school_id ? `Account (${state.auth.profile.school_id})` : 'Account';
+    if (logoutBtn) logoutBtn.classList.toggle('d-none', !state.auth?.token);
+  }
+
+  async function hydrateSession() {
+    const id = localStorage.getItem('lbas_id');
+    const token = localStorage.getItem('lbas_token');
+    if (!id || !token) return;
+    try {
+      const res = await fetch(`/api/user/${encodeURIComponent(id)}`);
+      const data = await res.json();
+      if (data?.profile?.school_id) {
+        state.auth = {
+          token,
+          profile: {
+            school_id: String(data.profile.school_id || id).trim().toLowerCase(),
+            name: data.profile.name || id,
+          },
+        };
+      }
+    } catch (_) {}
   }
 
   function renderHomeCards() {
@@ -69,12 +95,24 @@
     const res = await fetch('/api/verify_id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ school_id: sId }) });
     const data = await res.json();
     if (!data.success) return showToast(data.message || 'Verification failed.');
-    localStorage.setItem('bookPageAuth', JSON.stringify({ token: data.token, profile: data.profile }));
+    state.auth = { token: data.token, profile: data.profile };
+    localStorage.setItem('bookPageAuth', JSON.stringify(state.auth));
+    localStorage.setItem('lbas_id', state.auth.profile.school_id);
+    localStorage.setItem('lbas_token', state.auth.token);
     toggleModal('userLoginModal', false);
-    showToast('ID verified. You can now reserve from Books page.');
-    window.location.href = '/books';
+    syncSessionUI();
+    showToast('Login successful. You can reserve books now.');
   }
   window.submitLandingLogin = submitLandingLogin;
+
+  function logoutSession() {
+    state.auth = null;
+    localStorage.removeItem('bookPageAuth');
+    localStorage.removeItem('lbas_id');
+    localStorage.removeItem('lbas_token');
+    syncSessionUI();
+    showToast('Logged out.');
+  }
 
   async function loadLandingContent() {
     const [cardRes, newsRes] = await Promise.all([fetch('/api/home_cards'), fetch('/api/news_posts')]);
@@ -88,5 +126,11 @@
 
   document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => toggleModal(btn.dataset.close, false)));
   document.getElementById('newsReadModal')?.addEventListener('click', (e) => { if (e.target.id === 'newsReadModal') toggleModal('newsReadModal', false); });
-  loadLandingContent();
+  document.getElementById('landingLogoutBtn')?.addEventListener('click', logoutSession);
+
+  (async function init() {
+    await hydrateSession();
+    syncSessionUI();
+    loadLandingContent();
+  })();
 })();

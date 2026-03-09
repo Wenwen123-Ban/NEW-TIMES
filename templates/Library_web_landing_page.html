@@ -34,10 +34,12 @@
           <li class="nav-item"><a class="nav-link" href="/books">Books</a></li>
           <li class="nav-item"><a class="nav-link" href="#" onclick="openAboutModal(); return false;">About</a></li>
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Login</a>
+            <a id="landingAccountMenuToggle" class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Account</a>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><button class="dropdown-item" type="button" onclick="toggleModal('userLoginModal', true)">User Login</button></li>
               <li><button class="dropdown-item" type="button" onclick="toggleModal('adminLoginModal', true)">Admin Login</button></li>
+              <li><a class="dropdown-item" href="/lbas">MyAcc (LBAS)</a></li>
+              <li><button id="landingLogoutBtn" class="dropdown-item d-none" type="button">Logout</button></li>
             </ul>
           </li>
         </ul>
