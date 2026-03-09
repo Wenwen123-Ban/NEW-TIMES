@@ -8,6 +8,140 @@
   function toggleModal(id, show) { const node = document.getElementById(id); if (!node) return; node.classList.toggle('show', !!show); node.setAttribute('aria-hidden', show ? 'false' : 'true'); }
   window.toggleModal = toggleModal;
 
+
+  function showSignUpError(message) {
+    const error = document.getElementById('signUpError');
+    if (!error) return;
+    error.textContent = message || 'Unable to submit request.';
+    error.hidden = false;
+  }
+
+  function previewSignUpPhoto(input) {
+    if (input.files && input.files[0]) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const preview = document.getElementById('signUpPhotoPreview');
+        const icon = document.getElementById('signUpCameraIcon');
+        if (!preview || !icon) return;
+        preview.src = e.target.result;
+        preview.hidden = false;
+        icon.style.display = 'none';
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+
+  function openSignUpModal() {
+    document.getElementById('navDropdownMenu')?.classList.remove('open');
+    ['signUpName', 'signUpId', 'signUpEmail', 'signUpPassword', 'signUpConfirm'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    const preview = document.getElementById('signUpPhotoPreview');
+    const icon = document.getElementById('signUpCameraIcon');
+    const file = document.getElementById('signUpPhotoFile');
+    const circle = document.getElementById('signUpPhotoCircle');
+    const hint = document.querySelector('.signup-photo-hint');
+    if (preview) {
+      preview.src = '';
+      preview.hidden = true;
+    }
+    if (icon) icon.style.display = 'block';
+    if (file) file.value = '';
+    if (circle) circle.style.display = 'flex';
+    if (hint) hint.style.display = 'block';
+
+    ['fgSignUpName', 'fgSignUpId', 'fgSignUpEmail', 'fgSignUpPassword', 'fgSignUpConfirm'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'block';
+    });
+
+    const error = document.getElementById('signUpError');
+    const success = document.getElementById('signUpSuccess');
+    const submit = document.getElementById('signUpSubmitBtn');
+    const cancel = document.getElementById('signUpCancelBtn');
+    if (error) error.hidden = true;
+    if (success) success.hidden = true;
+    if (submit) {
+      submit.style.display = 'block';
+      submit.disabled = false;
+      submit.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+    }
+    if (cancel) cancel.textContent = 'Cancel';
+    const footerLink = document.getElementById('signUpFooterLink');
+    if (footerLink) footerLink.style.display = 'block';
+
+    toggleModal('userLoginModal', false);
+    document.getElementById('signUpModal')?.classList.add('active');
+    document.getElementById('signUpModal')?.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeSignUpModal() {
+    const modal = document.getElementById('signUpModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  async function submitSignUp() {
+    const name = document.getElementById('signUpName')?.value.trim() || '';
+    const schoolId = (document.getElementById('signUpId')?.value || '').trim().toLowerCase();
+    const email = (document.getElementById('signUpEmail')?.value || '').trim().toLowerCase();
+    const password = document.getElementById('signUpPassword')?.value.trim() || '';
+    const confirm = document.getElementById('signUpConfirm')?.value.trim() || '';
+    const photoFile = document.getElementById('signUpPhotoFile')?.files?.[0];
+
+    if (!name) return showSignUpError('Please enter your full name.');
+    if (!schoolId) return showSignUpError('Please enter your School ID.');
+    if (!email) return showSignUpError('Please enter your email address.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showSignUpError('Please enter a valid email address.');
+    if (!password) return showSignUpError('Please create a password.');
+    if (password.length < 6) return showSignUpError('Password must be at least 6 characters.');
+    if (password !== confirm) return showSignUpError('Passwords do not match.');
+
+    const btn = document.getElementById('signUpSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('school_id', schoolId);
+    fd.append('email', email);
+    fd.append('password', password);
+    if (photoFile) fd.append('photo', photoFile);
+
+    try {
+      const res = await fetch('/api/register_request', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.success) {
+        ['fgSignUpName', 'fgSignUpId', 'fgSignUpEmail', 'fgSignUpPassword', 'fgSignUpConfirm'].forEach((id) => {
+          document.getElementById(id).style.display = 'none';
+        });
+        document.getElementById('signUpPhotoCircle').style.display = 'none';
+        document.querySelector('.signup-photo-hint').style.display = 'none';
+        btn.style.display = 'none';
+        document.getElementById('signUpCancelBtn').textContent = 'Close';
+        const footerLink = document.getElementById('signUpFooterLink');
+        if (footerLink) footerLink.style.display = 'none';
+        document.getElementById('signUpSuccessEmail').textContent = email;
+        document.getElementById('signUpSuccess').hidden = false;
+        document.getElementById('signUpError').hidden = true;
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+        showSignUpError(data.message || 'Submission failed. Try again.');
+      }
+    } catch (_) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+      showSignUpError('Connection error. Please try again.');
+    }
+  }
+
+  window.openSignUpModal = openSignUpModal;
+  window.closeSignUpModal = closeSignUpModal;
+
   function showToast(message) {
     const toast = document.getElementById('constructionToast');
     if (!toast) return;
@@ -127,6 +261,17 @@
   document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => toggleModal(btn.dataset.close, false)));
   document.getElementById('newsReadModal')?.addEventListener('click', (e) => { if (e.target.id === 'newsReadModal') toggleModal('newsReadModal', false); });
   document.getElementById('landingLogoutBtn')?.addEventListener('click', logoutSession);
+
+  document.getElementById('openSignUpFromLoginBtn')?.addEventListener('click', openSignUpModal);
+  document.getElementById('signUpSubmitBtn')?.addEventListener('click', submitSignUp);
+  document.getElementById('signUpCancelBtn')?.addEventListener('click', closeSignUpModal);
+  document.getElementById('signUpCloseBtn')?.addEventListener('click', closeSignUpModal);
+  document.getElementById('signUpLoginLink')?.addEventListener('click', () => {
+    closeSignUpModal();
+    toggleModal('userLoginModal', true);
+  });
+  document.getElementById('signUpPhotoCircle')?.addEventListener('click', () => document.getElementById('signUpPhotoFile')?.click());
+  document.getElementById('signUpPhotoFile')?.addEventListener('change', (e) => previewSignUpPhoto(e.target));
 
   (async function init() {
     await hydrateSession();

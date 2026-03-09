@@ -8,6 +8,130 @@
   function openLoginModal() { modal('idLoginModal', true); }
   window.openLoginModal = openLoginModal;
 
+
+  function showSignUpError(message) {
+    const error = byId('signUpError');
+    if (!error) return;
+    error.textContent = message || 'Unable to submit request.';
+    error.hidden = false;
+  }
+
+  function previewSignUpPhoto(input) {
+    if (input.files && input.files[0]) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const preview = byId('signUpPhotoPreview');
+        const icon = byId('signUpCameraIcon');
+        if (!preview || !icon) return;
+        preview.src = e.target.result;
+        preview.hidden = false;
+        icon.style.display = 'none';
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+
+  function openSignUpModal() {
+    ['signUpName', 'signUpId', 'signUpEmail', 'signUpPassword', 'signUpConfirm'].forEach((id) => {
+      const el = byId(id);
+      if (el) el.value = '';
+    });
+
+    const preview = byId('signUpPhotoPreview');
+    const icon = byId('signUpCameraIcon');
+    const file = byId('signUpPhotoFile');
+    const circle = byId('signUpPhotoCircle');
+    const hint = document.querySelector('.signup-photo-hint');
+    if (preview) {
+      preview.src = '';
+      preview.hidden = true;
+    }
+    if (icon) icon.style.display = 'block';
+    if (file) file.value = '';
+    if (circle) circle.style.display = 'flex';
+    if (hint) hint.style.display = 'block';
+
+    ['fgSignUpName', 'fgSignUpId', 'fgSignUpEmail', 'fgSignUpPassword', 'fgSignUpConfirm'].forEach((id) => {
+      const el = byId(id);
+      if (el) el.style.display = 'block';
+    });
+
+    if (byId('signUpError')) byId('signUpError').hidden = true;
+    if (byId('signUpSuccess')) byId('signUpSuccess').hidden = true;
+    const submit = byId('signUpSubmitBtn');
+    if (submit) {
+      submit.style.display = 'block';
+      submit.disabled = false;
+      submit.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+    }
+    if (byId('signUpCancelBtn')) byId('signUpCancelBtn').textContent = 'Cancel';
+    if (byId('signUpFooterLink')) byId('signUpFooterLink').style.display = 'block';
+
+    modal('idLoginModal', false);
+    byId('signUpModal')?.classList.add('active');
+    byId('signUpModal')?.setAttribute('aria-hidden', 'false');
+  }
+  window.openSignUpModal = openSignUpModal;
+
+  function closeSignUpModal() {
+    byId('signUpModal')?.classList.remove('active');
+    byId('signUpModal')?.setAttribute('aria-hidden', 'true');
+  }
+
+  async function submitSignUp() {
+    const name = byId('signUpName')?.value.trim() || '';
+    const schoolId = (byId('signUpId')?.value || '').trim().toLowerCase();
+    const email = (byId('signUpEmail')?.value || '').trim().toLowerCase();
+    const password = byId('signUpPassword')?.value.trim() || '';
+    const confirm = byId('signUpConfirm')?.value.trim() || '';
+    const photoFile = byId('signUpPhotoFile')?.files?.[0];
+
+    if (!name) return showSignUpError('Please enter your full name.');
+    if (!schoolId) return showSignUpError('Please enter your School ID.');
+    if (!email) return showSignUpError('Please enter your email address.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showSignUpError('Please enter a valid email address.');
+    if (!password) return showSignUpError('Please create a password.');
+    if (password.length < 6) return showSignUpError('Password must be at least 6 characters.');
+    if (password !== confirm) return showSignUpError('Passwords do not match.');
+
+    const btn = byId('signUpSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('school_id', schoolId);
+    fd.append('email', email);
+    fd.append('password', password);
+    if (photoFile) fd.append('photo', photoFile);
+
+    try {
+      const res = await fetch('/api/register_request', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.success) {
+        ['fgSignUpName', 'fgSignUpId', 'fgSignUpEmail', 'fgSignUpPassword', 'fgSignUpConfirm'].forEach((id) => {
+          byId(id).style.display = 'none';
+        });
+        byId('signUpPhotoCircle').style.display = 'none';
+        document.querySelector('.signup-photo-hint').style.display = 'none';
+        btn.style.display = 'none';
+        byId('signUpCancelBtn').textContent = 'Close';
+        if (byId('signUpFooterLink')) byId('signUpFooterLink').style.display = 'none';
+        byId('signUpSuccessEmail').textContent = email;
+        byId('signUpSuccess').hidden = false;
+        byId('signUpError').hidden = true;
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+        showSignUpError(data.message || 'Submission failed. Try again.');
+      }
+    } catch (_) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+      showSignUpError('Connection error. Please try again.');
+    }
+  }
+
   function statusClass(status) {
     const s = String(status || '').toLowerCase();
     if (s === 'borrowed') return 'status-borrowed';
@@ -185,6 +309,14 @@
   byId('reserveSubmitBtn').addEventListener('click', reserveSelectedBook);
   byId('logoutSessionBtn')?.addEventListener('click', logout);
   document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => modal(btn.dataset.close, false)));
+
+  byId('openSignUpFromBookLoginBtn')?.addEventListener('click', openSignUpModal);
+  byId('signUpSubmitBtn')?.addEventListener('click', submitSignUp);
+  byId('signUpCancelBtn')?.addEventListener('click', closeSignUpModal);
+  byId('signUpCloseBtn')?.addEventListener('click', closeSignUpModal);
+  byId('signUpLoginLink')?.addEventListener('click', () => { closeSignUpModal(); openLoginModal(); });
+  byId('signUpPhotoCircle')?.addEventListener('click', () => byId('signUpPhotoFile')?.click());
+  byId('signUpPhotoFile')?.addEventListener('change', (e) => previewSignUpPhoto(e.target));
 
   (async function init() {
     restoreCachedAuth();
