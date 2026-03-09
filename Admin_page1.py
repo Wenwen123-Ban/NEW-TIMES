@@ -1215,9 +1215,6 @@ def api_admin_get_approval_records():
 
 @app.route("/api/books")
 def api_get_books():
-    if not require_auth():
-        return jsonify({"success": False, "message": "Unauthorized"}), 401
-
     books = run_auto_sync_engine()
     if not isinstance(books, list):
         books = []
