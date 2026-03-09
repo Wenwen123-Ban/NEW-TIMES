@@ -78,10 +78,48 @@ ACTIVE_SESSIONS = {}
 SESSION_TIMEOUT_HOURS = 2
 
 
+def _normalize_auth_provider(user):
+    if not isinstance(user, dict):
+        return "local"
+    provider = str(user.get("auth_provider") or "").strip().lower()
+    if provider:
+        return provider
+    return "google" if str(user.get("google_id") or "").strip() else "local"
+
+
+def _with_default_auth_fields(user):
+    profile = dict(user or {})
+    profile.setdefault("auth_provider", _normalize_auth_provider(profile))
+    profile.setdefault("email_verified", False)
+    profile.setdefault("google_id", "")
+    return profile
+
+
+def _extract_auth_token(raw_header):
+    token = str(raw_header or "").strip()
+    if not token:
+        return ""
+    if token.lower().startswith("bearer "):
+        return token[7:].strip()
+    return token
+
+
+def _log_auth_block(reason, **ctx):
+    context = " ".join(f"{k}={v}" for k, v in ctx.items() if v not in (None, ""))
+    suffix = f" {context}" if context else ""
+    logger.warning(f"AUTH BLOCKED: reason={reason}{suffix}")
+
 
 def require_auth():
-    token = request.headers.get("Authorization")
+    raw_token = request.headers.get("Authorization")
+    token = _extract_auth_token(raw_token)
     if not token:
+        _log_auth_block(
+            "missing_session",
+            endpoint=request.path,
+            method=request.method,
+            has_authorization_header=bool(raw_token),
+        )
         return None
 
     to_delete = []
@@ -93,6 +131,9 @@ def require_auth():
 
     for uid in to_delete:
         del ACTIVE_SESSIONS[uid]
+        _log_auth_block("expired_session", endpoint=request.path, user_id=uid)
+
+    _log_auth_block("invalid_session", endpoint=request.path, method=request.method)
 
     return None
 
@@ -219,6 +260,9 @@ def create_account_entry(target_db_key, category_name, name, school_id, password
             "category": category_name,
             "photo": saved_photo,
             "status": "approved",
+            "auth_provider": "local",
+            "email_verified": False,
+            "google_id": "",
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "phone_number": "",
         }
@@ -656,14 +700,14 @@ def find_any_user(s_id):
             result = dict(admin)
             result["registry_origin"] = "admins.json"
             result["is_staff"] = True
-            return result
+            return _with_default_auth_fields(result)
 
     for student in get_db("users"):
         if str(student.get("school_id", "")).strip().lower() == s_id:
             result = dict(student)
             result["registry_origin"] = "users.json"
             result["is_staff"] = False
-            return result
+            return _with_default_auth_fields(result)
     return None
 
 
@@ -1219,8 +1263,11 @@ def api_login():
                 )
         return jsonify({"success": False, "message": "ID not found"}), 404
 
-    if user["status"] == "pending":
+    if str(user.get("status", "approved")).strip().lower() == "pending":
         return jsonify({"success": False, "message": "Account Pending Approval"}), 401
+
+    user = _with_default_auth_fields(user)
+    auth_provider = _normalize_auth_provider(user)
 
     if id_only and not user.get("is_staff", False):
         token = str(uuid.uuid4())
@@ -1228,6 +1275,29 @@ def api_login():
             "token": token,
             "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
         }
+        record_system_event("login", s_id)
+        return jsonify({"success": True, "token": token, "profile": user})
+
+    if auth_provider not in {"local", "google"}:
+        _log_auth_block("invalid_provider", school_id=s_id, provider=auth_provider)
+        return jsonify({"success": False, "message": "Unsupported authentication provider"}), 401
+
+    if auth_provider == "google":
+        if not str(user.get("google_id") or "").strip():
+            _log_auth_block("google_account_missing_id", school_id=s_id)
+            return jsonify({"success": False, "message": "Google account is not configured"}), 401
+
+        token = str(uuid.uuid4())
+        ACTIVE_SESSIONS[s_id] = {
+            "token": token,
+            "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS),
+        }
+        if user.get("is_staff", False):
+            session["is_admin"] = True
+            session["admin_school_id"] = s_id
+        else:
+            session.pop("is_admin", None)
+            session.pop("admin_school_id", None)
         record_system_event("login", s_id)
         return jsonify({"success": True, "token": token, "profile": user})
 
@@ -1252,7 +1322,7 @@ def api_login():
 @app.route("/api/logout", methods=["POST"])
 def api_logout():
     session.clear()
-    token = request.headers.get("Authorization")
+    token = _extract_auth_token(request.headers.get("Authorization"))
     for user_id, active_session in list(ACTIVE_SESSIONS.items()):
         if isinstance(active_session, dict) and active_session.get("token") == token:
             del ACTIVE_SESSIONS[user_id]
