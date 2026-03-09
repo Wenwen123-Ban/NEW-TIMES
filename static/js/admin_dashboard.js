@@ -1128,7 +1128,7 @@ let editModal;
         document.getElementById('borrowPickupDate').value = transaction.pickup_schedule || transaction.date || '-';
         document.getElementById('borrowApprovedBy').value = approvedBy;
         document.getElementById('borrowRequestId').value = transaction.request_id || `REQ-${Date.now().toString(36).toUpperCase()}`;
-        const pickupDate = String(transaction.pickup_schedule || '').trim();
+        const pickupDate = String(pickupDateOnly(transaction.pickup_schedule) || '').trim();
         const returnDateInput = document.getElementById('borrowReturnDate');
         returnDateInput.value = '';
         returnDateInput.dataset.minPickupDate = pickupDate;
