@@ -73,7 +73,8 @@
       <p class="text-muted small">Please log in first before continuing with reservation.</p>
       <input id="userSchoolId" class="form-control my-3" placeholder="School ID" />
       <button id="verifyIdBtn" class="btn btn-primary w-100 mb-2">Continue</button>
-      <button class="btn btn-outline-secondary w-100" data-close="idLoginModal">Cancel</button>
+      <button class="btn btn-outline-secondary w-100 mb-2" data-close="idLoginModal">Cancel</button>
+      <button class="btn btn-link w-100" type="button" id="openSignUpFromBookLoginBtn">Create an account request</button>
     </article>
   </div>
 
@@ -96,6 +97,60 @@
       <input id="reserveContactValue" class="form-control" placeholder="09XXXXXXXXX" />
       <button id="reserveSubmitBtn" class="btn btn-primary w-100 mt-3">Confirm Reservation</button>
     </article>
+  </div>
+
+
+
+  <div id="signUpModal" class="lbas-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="lbas-modal-card signup-card">
+      <button class="lbas-modal-close" type="button" id="signUpCloseBtn">×</button>
+      <h3 class="lbas-modal-title">New Application</h3>
+      <p class="lbas-modal-subtitle">Request library access from the Librarian.</p>
+
+      <div class="signup-upload-circle" id="signUpPhotoCircle">
+        <i class="fas fa-camera signup-upload-icon" id="signUpCameraIcon"></i>
+        <img id="signUpPhotoPreview" class="signup-photo-preview" src="" alt="Selected ID photo" hidden />
+      </div>
+      <input type="file" id="signUpPhotoFile" accept="image/*" hidden />
+      <p class="signup-photo-hint">Tap circle to add ID photo (optional)</p>
+
+      <hr>
+
+      <div class="lbas-form-group" id="fgSignUpName">
+        <label for="signUpName">Full Name</label>
+        <input type="text" id="signUpName" class="lbas-input" placeholder="e.g. Juan Dela Cruz" />
+      </div>
+      <div class="lbas-form-group" id="fgSignUpId">
+        <label for="signUpId">School ID Number</label>
+        <input type="text" id="signUpId" class="lbas-input" placeholder="e.g. 2023-0015" />
+      </div>
+      <div class="lbas-form-group" id="fgSignUpEmail">
+        <label for="signUpEmail">Email Address</label>
+        <input type="email" id="signUpEmail" class="lbas-input" placeholder="your@email.com" />
+        <small class="signup-field-hint">You will be notified here once your account is approved.</small>
+      </div>
+      <div class="lbas-form-group" id="fgSignUpPassword">
+        <label for="signUpPassword">Create Password</label>
+        <input type="password" id="signUpPassword" class="lbas-input" placeholder="••••••••" />
+      </div>
+      <div class="lbas-form-group" id="fgSignUpConfirm">
+        <label for="signUpConfirm">Confirm Password</label>
+        <input type="password" id="signUpConfirm" class="lbas-input" placeholder="••••••••" />
+      </div>
+
+      <div id="signUpError" class="lbas-error-msg" hidden></div>
+      <div id="signUpSuccess" class="signup-success-msg" hidden>
+        <i class="fas fa-check-circle"></i>
+        <div>
+          <strong>Application Sent!</strong>
+          <p>Your request has been forwarded to the Librarian. You cannot log in until approved. You will be notified at <span id="signUpSuccessEmail" class="signup-email-highlight"></span>.</p>
+        </div>
+      </div>
+
+      <button class="lbas-btn-primary" id="signUpSubmitBtn" type="button"><i class="fas fa-paper-plane"></i> Submit Request</button>
+      <button class="lbas-btn-secondary" id="signUpCancelBtn" type="button">Cancel</button>
+      <div class="lbas-modal-footer-link" id="signUpFooterLink">Already have an account? <span id="signUpLoginLink">Log In</span></div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
