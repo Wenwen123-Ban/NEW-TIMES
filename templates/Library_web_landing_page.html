@@ -30,14 +30,14 @@
       <div class="collapse navbar-collapse" id="landingNav">
         <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
           <li class="nav-item"><a class="nav-link" href="#home">Home</a></li>
-          <li class="nav-item"><a class="nav-link" href="#" onclick="openAboutModal(); return false;">About</a></li>
           <li class="nav-item"><a class="nav-link" href="#news">News</a></li>
-          <li class="nav-item"><a class="nav-link" href="#catalog">Catalog</a></li>
+          <li class="nav-item"><a class="nav-link" href="#catalog">Book Catalog</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" onclick="openAboutModal(); return false;">About</a></li>
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Log in</a>
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Login</a>
             <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="{{ url_for('admin_site') }}">Admin Log in</a></li>
-              <li><a class="dropdown-item" href="{{ url_for('lbas_site') }}">Reserve a book</a></li>
+              <li><button class="dropdown-item" type="button" onclick="toggleModal('userLoginModal', true)">User Login</button></li>
+              <li><button class="dropdown-item" type="button" onclick="toggleModal('adminLoginModal', true)">Admin Login</button></li>
             </ul>
           </li>
         </ul>
@@ -59,10 +59,13 @@
     </section>
 
     <section id="catalog" class="section-card">
-      <h3>Catalog</h3>
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0">Book Catalog</h3>
+        <small class="text-light">Browse publicly. Reserving requires login.</small>
+      </div>
       <div class="table-responsive">
-        <table class="table table-sm table-dark table-striped align-middle mb-0" id="catalogLeaderboardTable">
-          <thead><tr><th>#</th><th>Borrower</th><th>ID</th><th>Total Borrowed</th></tr></thead>
+        <table class="table table-sm table-dark table-striped align-middle mb-0" id="catalogBooksTable">
+          <thead><tr><th>Book #</th><th>Title</th><th>Author</th><th>Category</th><th>Status</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -76,11 +79,31 @@
     </div>
   </footer>
 
+  <div id="userLoginModal" class="news-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <article class="news-modal-content login-modal">
+      <h4>User Login</h4>
+      <input id="userSchoolId" class="form-control mb-2" placeholder="School ID">
+      <input id="userPassword" type="password" class="form-control mb-3" placeholder="Password">
+      <button class="btn btn-primary w-100 mb-2" onclick="submitLandingLogin(false)">Login</button>
+      <button class="btn btn-outline-secondary w-100" data-close="userLoginModal">Cancel</button>
+    </article>
+  </div>
+
+  <div id="adminLoginModal" class="news-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <article class="news-modal-content login-modal">
+      <h4>Admin Login</h4>
+      <input id="adminSchoolId" class="form-control mb-2" placeholder="Admin ID">
+      <input id="adminPassword" type="password" class="form-control mb-3" placeholder="Password">
+      <button class="btn btn-primary w-100 mb-2" onclick="submitLandingLogin(true)">Login</button>
+      <button class="btn btn-outline-secondary w-100" data-close="adminLoginModal">Cancel</button>
+    </article>
+  </div>
+
   <button id="aboutTriggerBtn" onclick="openAboutModal()" title="About LBAS" aria-label="About LBAS">
     <i class="fas fa-info"></i>
   </button>
 
-  <div id="constructionToast" class="construction-toast" role="status" aria-live="polite">To be made first under website construction.</div>
+  <div id="constructionToast" class="construction-toast" role="status" aria-live="polite">To reserve a book, please log in first.</div>
 
   <div id="newsReadModal" class="news-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
     <button class="news-modal-close" type="button" data-close="newsReadModal">×</button>

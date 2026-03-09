@@ -8,7 +8,6 @@ import random  # REQUIRED for Ticket Codes
 import re
 import string  # REQUIRED for Ticket Codes
 import threading
-import pymysql
 from flask import (
     Flask,
     render_template,
@@ -68,14 +67,6 @@ DB_FILES = {
     "log_rec": "log_rec.json",
     "home_cards": "home_cards.json",
     "news_posts": "news_posts.json",
-}
-
-MYSQL_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "lbas_db",
-    "charset": "utf8mb4",
 }
 
 ACTIVE_SESSIONS = {}
@@ -338,350 +329,35 @@ def initialize_system():
 
 
 def get_db(key):
-    table_map = {
-        "books": "books",
-        "admins": "admins",
-        "users": "users",
-        "transactions": "transactions",
-        "config": "system_config",
-        "tickets": "tickets",
-        "categories": "categories",
-        "date_restricted": "date_restricted",
-        "reservation_transactions": "reservation_transactions",
-        "admin_approval_record": "admin_approval_record",
-        "registration_requests": "registration_requests",
-        "log_rec": "log_rec",
-        "home_cards": "home_cards",
-        "news_posts": "news_posts",
-    }
+    file_path = DB_FILES.get(key)
+    if not file_path:
+        return {} if key in {"config", "date_restricted", "log_rec"} else []
 
-    def _parse_json(value, fallback):
-        if isinstance(value, (dict, list)):
-            return value
-        if value is None:
-            return fallback
-        try:
-            parsed = json.loads(value)
-            return parsed if isinstance(parsed, type(fallback)) else fallback
-        except Exception:
-            return fallback
-
-    conn = None
+    fallback = {} if key in {"config", "date_restricted", "log_rec"} else []
     try:
-        table = table_map.get(key)
-        if not table:
-            return {} if key == "config" else []
-
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            if key == "config":
-                cursor.execute("SELECT config_key, config_value FROM system_config")
-                rows = cursor.fetchall() or []
-                return {str(r.get("config_key", "")): r.get("config_value", "") for r in rows if r.get("config_key")}
-
-            if key == "categories":
-                cursor.execute("SELECT name FROM categories")
-                rows = cursor.fetchall() or []
-                return [str(r.get("name", "")).strip() for r in rows if str(r.get("name", "")).strip()]
-
-            if key == "log_rec":
-                cursor.execute("SELECT data FROM log_rec ORDER BY id DESC LIMIT 1")
-                row = cursor.fetchone() or {}
-                return _parse_json(row.get("data"), {"month": _current_month_key(), "events": []})
-
-            if key == "date_restricted":
-                cursor.execute("SELECT data FROM date_restricted ORDER BY id DESC LIMIT 1")
-                row = cursor.fetchone() or {}
-                return _parse_json(row.get("data"), {})
-
-            if key == "transactions":
-                cursor.execute(
-                    """
-                    SELECT *
-                    FROM transactions
-                    """
-                )
-                rows = cursor.fetchall() or []
-                return [
-                    {
-                        "id": row.get("id"),
-                        "book_no": row.get("book_no") or row.get("book_id", ""),
-                        "school_id": row.get("borrower_id") or row.get("school_id") or row.get("user_id", ""),
-                        "borrower_name": row.get("borrower_name", ""),
-                        "status": row.get("status") or row.get("transaction_status", ""),
-                        "date": row.get("date_borrowed") or row.get("date", ""),
-                        "return_date": row.get("date_returned") or row.get("return_date", ""),
-                        "expiry": row.get("due_date") or row.get("expiry", ""),
-                        "pickup_schedule": row.get("pickup_schedule") or row.get("pickup_slot", ""),
-                        "due_date_override": row.get("due_date_override", ""),
-                        "request_id": row.get("request_id", ""),
-                    }
-                    for row in rows
-                ]
-
-            if key == "reservation_transactions":
-                cursor.execute(
-                    """
-                    SELECT id, book_id, user_id, user_name, status,
-                           pickup_slot, reserved_at, borrowed_by, borrowed_at
-                    FROM reservation_transactions
-                    """
-                )
-                rows = cursor.fetchall() or []
-                return [
-                    {
-                        "id": row.get("id"),
-                        "book_no": row.get("book_id", ""),
-                        "school_id": row.get("user_id", ""),
-                        "borrower_name": row.get("user_name", ""),
-                        "status": row.get("status", ""),
-                        "pickup_schedule": row.get("pickup_slot", ""),
-                        "date": row.get("reserved_at", ""),
-                        "borrowed_by": row.get("borrowed_by", ""),
-                        "borrowed_at": row.get("borrowed_at", ""),
-                    }
-                    for row in rows
-                ]
-
-            if key == "admin_approval_record":
-                cursor.execute(
-                    "SELECT id, admin_id, action, target_id, details, timestamp FROM admin_approval_record"
-                )
-                rows = cursor.fetchall() or []
-                parsed_rows = []
-                for row in rows:
-                    details = _parse_json(row.get("details"), {})
-                    if isinstance(details, dict) and details:
-                        parsed_rows.append(details)
-                    else:
-                        parsed_rows.append({k: row.get(k) for k in ["id", "admin_id", "action", "target_id", "details", "timestamp"]})
-                return parsed_rows
-
-            if key == "books":
-                cursor.execute("SELECT id, book_no, title, author, category, status, created_at FROM books")
-            elif key in {"admins", "users"}:
-                cursor.execute(
-                    f"SELECT school_id, name, password, category, photo, is_staff, status, phone_number, created_at FROM {table}"
-                )
-            elif key == "registration_requests":
-                cursor.execute(
-                    "SELECT id, name, school_id, password, category, photo, status, requested_at FROM registration_requests"
-                )
-            elif key == "tickets":
-                cursor.execute("SELECT id, school_id, code, status, created_at, expiry FROM tickets")
-            elif key == "home_cards":
-                cursor.execute("SELECT id, title, body FROM home_cards")
-            elif key == "news_posts":
-                cursor.execute("SELECT id, title, summary, body, image_filename, author, date FROM news_posts")
-            else:
-                return []
-
-            rows = cursor.fetchall() or []
-            if key in {"admins", "users"}:
-                for row in rows:
-                    row["is_staff"] = bool(row.get("is_staff"))
-            return rows
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(fallback, dict):
+            return data if isinstance(data, dict) else fallback
+        return data if isinstance(data, list) else fallback
+    except FileNotFoundError:
+        return fallback
     except Exception as e:
         logger.error(f"DB READ ERROR ({key}): {e}")
-        return {} if key == "config" else []
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        return fallback
 
 
 def save_db(key, data):
-    table_map = {
-        "books": "books",
-        "admins": "admins",
-        "users": "users",
-        "transactions": "transactions",
-        "config": "system_config",
-        "tickets": "tickets",
-        "categories": "categories",
-        "date_restricted": "date_restricted",
-        "reservation_transactions": "reservation_transactions",
-        "admin_approval_record": "admin_approval_record",
-        "registration_requests": "registration_requests",
-        "log_rec": "log_rec",
-        "home_cards": "home_cards",
-        "news_posts": "news_posts",
-    }
+    file_path = DB_FILES.get(key)
+    if not file_path:
+        return
 
     with _db_write_lock:
-        conn = None
         try:
-            table = table_map.get(key)
-            if not table:
-                return
-
-            conn = get_db_connection()
-            with conn.cursor() as cursor:
-                cursor.execute(f"DELETE FROM {table}")
-
-                if key == "config":
-                    if isinstance(data, dict):
-                        for cfg_key, cfg_value in data.items():
-                            cursor.execute(
-                                "INSERT INTO system_config (config_key, config_value) VALUES (%s, %s)",
-                                (str(cfg_key), str(cfg_value)),
-                            )
-
-                elif key == "categories":
-                    for name in (data or []):
-                        clean_name = str(name or "").strip()
-                        if clean_name:
-                            cursor.execute("INSERT INTO categories (name) VALUES (%s)", (clean_name,))
-
-                elif key == "log_rec":
-                    payload = data if isinstance(data, dict) else {"month": _current_month_key(), "events": []}
-                    cursor.execute("INSERT INTO log_rec (data) VALUES (%s)", (json.dumps(payload, ensure_ascii=False),))
-
-                elif key == "date_restricted":
-                    payload = data if isinstance(data, dict) else {}
-                    cursor.execute("INSERT INTO date_restricted (data) VALUES (%s)", (json.dumps(payload, ensure_ascii=False),))
-
-                elif key == "books":
-                    for row in (data or []):
-                        cursor.execute(
-                            "INSERT INTO books (book_no, title, author, category, status, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                            (
-                                row.get("book_no", ""),
-                                row.get("title", ""),
-                                row.get("author", ""),
-                                row.get("category", ""),
-                                row.get("status", ""),
-                                row.get("created_at", ""),
-                            ),
-                        )
-
-                elif key in {"admins", "users"}:
-                    for row in (data or []):
-                        cursor.execute(
-                            f"INSERT INTO {table} (school_id, name, password, category, photo, is_staff, status, phone_number, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                            (
-                                row.get("school_id", ""),
-                                row.get("name", ""),
-                                row.get("password", ""),
-                                row.get("category", ""),
-                                row.get("photo", "default.png"),
-                                1 if bool(row.get("is_staff")) else 0,
-                                row.get("status", "approved"),
-                                row.get("phone_number", ""),
-                                row.get("created_at", ""),
-                            ),
-                        )
-
-                elif key == "transactions":
-                    for row in (data or []):
-                        cursor.execute(
-                            "INSERT INTO transactions (book_no, borrower_id, borrower_name, status, date_borrowed, date_returned, due_date, pickup_schedule, due_date_override) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                            (
-                                row.get("book_no", ""),
-                                row.get("school_id", ""),
-                                row.get("borrower_name", ""),
-                                row.get("status", ""),
-                                row.get("date", ""),
-                                row.get("return_date", ""),
-                                row.get("expiry", ""),
-                                row.get("pickup_schedule", ""),
-                                row.get("due_date_override", ""),
-                            ),
-                        )
-
-                elif key == "reservation_transactions":
-                    for row in (data or []):
-                        cursor.execute(
-                            "INSERT INTO reservation_transactions (book_id, user_id, user_name, status, pickup_slot, reserved_at, borrowed_by, borrowed_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                            (
-                                row.get("book_no", ""),
-                                row.get("school_id", ""),
-                                row.get("borrower_name", ""),
-                                row.get("status", ""),
-                                row.get("pickup_schedule", ""),
-                                row.get("date", ""),
-                                row.get("borrowed_by", ""),
-                                row.get("borrowed_at", ""),
-                            ),
-                        )
-
-                elif key == "registration_requests":
-                    for row in (data or []):
-                        cursor.execute(
-                            "INSERT INTO registration_requests (name, school_id, password, category, photo, status, requested_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                            (
-                                row.get("name", ""),
-                                row.get("school_id", ""),
-                                row.get("password", ""),
-                                row.get("category", ""),
-                                row.get("photo", "default.png"),
-                                row.get("status", "pending"),
-                                row.get("requested_at", datetime.now().strftime("%Y-%m-%d %H:%M")),
-                            ),
-                        )
-
-                elif key == "tickets":
-                    for row in (data or []):
-                        cursor.execute(
-                            "INSERT INTO tickets (school_id, code, status, created_at, expiry) VALUES (%s, %s, %s, %s, %s)",
-                            (
-                                row.get("school_id", ""),
-                                row.get("code", ""),
-                                row.get("status", ""),
-                                row.get("created_at", ""),
-                                row.get("expiry", ""),
-                            ),
-                        )
-
-                elif key == "admin_approval_record":
-                    for row in (data or []):
-                        payload = row if isinstance(row, dict) else {"value": row}
-                        cursor.execute(
-                            "INSERT INTO admin_approval_record (admin_id, action, target_id, details, timestamp) VALUES (%s, %s, %s, %s, %s)",
-                            (
-                                str(payload.get("approved_by", "system") or "system"),
-                                str(payload.get("action", payload.get("status", "record")) or "record"),
-                                str(payload.get("school_id", payload.get("target_id", "")) or ""),
-                                json.dumps(payload, ensure_ascii=False),
-                                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            ),
-                        )
-
-                elif key == "home_cards":
-                    for row in (data or []):
-                        cursor.execute(
-                            "INSERT INTO home_cards (id, title, body) VALUES (%s, %s, %s)",
-                            (row.get("id"), row.get("title", ""), row.get("body", "")),
-                        )
-
-                elif key == "news_posts":
-                    for row in (data or []):
-                        cursor.execute(
-                            "INSERT INTO news_posts (id, title, summary, body, image_filename, author, date) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                            (
-                                row.get("id", uuid.uuid4().hex),
-                                row.get("title", ""),
-                                row.get("summary", ""),
-                                row.get("body", ""),
-                                row.get("image_filename"),
-                                row.get("author", ""),
-                                row.get("date", datetime.now().strftime("%Y-%m-%d %H:%M")),
-                            ),
-                        )
-
-                conn.commit()
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
         except Exception as e:
             logger.error(f"DB WRITE ERROR ({key}): {e}")
-            if conn:
-                conn.rollback()
-        finally:
-            if conn:
-                conn.close()
-
-
-def get_db_connection():
-    return pymysql.connect(cursorclass=pymysql.cursors.DictCursor, **MYSQL_CONFIG)
 
 
 def _current_month_key():
