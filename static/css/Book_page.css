@@ -1,0 +1,15 @@
+body { background:#0f172a; color:#fff; min-height:100vh; }
+.books-header { padding:28px 20px 8px; text-align:center; }
+.toolbar { display:flex; gap:12px; align-items:center; }
+.result-count { font-size:.9rem; opacity:.85; }
+.category-pills { display:flex; gap:8px; flex-wrap:wrap; }
+.category-pills button { border:1px solid rgba(255,255,255,.3); background:transparent; color:#fff; border-radius:999px; padding:6px 12px; }
+.category-pills button.active { background:#facc15; color:#111; border-color:#facc15; }
+.catalog-grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); }
+.book-card { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16); border-radius:14px; padding:12px; }
+.fab { position:fixed; right:18px; bottom:18px; border-radius:999px; }
+.overlay { position:fixed; inset:0; display:none; background:rgba(0,0,0,.6); align-items:center; justify-content:center; z-index:1000; }
+.overlay.show { display:flex; }
+.modal-card { width:min(460px,92vw); background:#fff; color:#111; border-radius:12px; padding:18px; }
+.books-toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#111; color:#fff; padding:8px 12px; border-radius:8px; opacity:0; transition:.2s; }
+.books-toast.show { opacity:1; }

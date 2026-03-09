@@ -21,6 +21,7 @@ from flask import (
 )
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
+from api.auth import register_auth_routes
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("LBAS_SECRET_KEY", "lbas-admin-session-secret")
@@ -71,6 +72,7 @@ DB_FILES = {
 
 ACTIVE_SESSIONS = {}
 SESSION_TIMEOUT_HOURS = 2
+
 
 
 def require_auth():
@@ -585,6 +587,9 @@ def find_any_user(s_id):
     return None
 
 
+register_auth_routes(app, find_any_user, ACTIVE_SESSIONS, SESSION_TIMEOUT_HOURS)
+
+
 def is_mobile_request():
     ua = request.headers.get("User-Agent", "").lower()
     return any(
@@ -758,6 +763,11 @@ def admin_site():
 @app.route("/lbas")
 def lbas_site():
     return render_template("LBAS.html")
+
+
+@app.route("/books")
+def books_page():
+    return render_template("Book_page.html")
 
 
 @app.route("/tablet")
