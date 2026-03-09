@@ -30,7 +30,7 @@ def _write_json(app, filename, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def register_auth_routes(app, find_any_user, active_sessions, session_timeout_hours):
+def register_auth_routes(app, find_any_user, active_sessions, session_timeout_hours, save_sessions_fn=None):
     @app.route('/api/verify_id', methods=['POST'])
     def api_verify_id():
         data = request.json or {}
@@ -42,11 +42,33 @@ def register_auth_routes(app, find_any_user, active_sessions, session_timeout_ho
         if not user:
             return jsonify({'success': False, 'message': 'School ID not found.'}), 404
 
+        if user.get('is_staff', False):
+            return jsonify({
+                'success': False,
+                'message': 'Admin accounts must log in with password via Admin Login.'
+            }), 403
+
+        status = str(user.get('status', 'active')).strip().lower()
+        if status == 'pending':
+            return jsonify({
+                'success': False,
+                'status': 'pending',
+                'message': 'Account pending approval.'
+            }), 403
+        if status == 'rejected':
+            return jsonify({
+                'success': False,
+                'status': 'rejected',
+                'message': 'Registration was not approved.'
+            }), 403
+
         token = f"{school_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         active_sessions[school_id] = {
             'token': token,
             'expires': datetime.now() + timedelta(hours=session_timeout_hours),
         }
+        if save_sessions_fn:
+            save_sessions_fn()
 
         profile = {
             'name': user.get('name', school_id),
