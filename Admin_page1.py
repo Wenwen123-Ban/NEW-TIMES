@@ -229,35 +229,6 @@ def create_account_entry(target_db_key, category_name, name, school_id, password
 
 
 
-def repair_cloudfared_filesystem():
-    """Cleanup accidental cloudfared filesystem artifacts and invalid filenames."""
-    root = os.path.dirname(os.path.abspath(__file__))
-    cleaned = []
-    cloudfared_dir = os.path.join(root, "cloudfared")
-    if os.path.isdir(cloudfared_dir):
-        for entry in os.listdir(cloudfared_dir):
-            path = os.path.join(cloudfared_dir, entry)
-            if os.path.isfile(path):
-                os.remove(path)
-                cleaned.append(path)
-        try:
-            if not os.listdir(cloudfared_dir):
-                os.rmdir(cloudfared_dir)
-        except OSError:
-            pass
-
-    invalid_patterns = ("http://", "https://", "cloudflared", "ERR_")
-    for entry in os.listdir(root):
-        path = os.path.join(root, entry)
-        if not os.path.isfile(path):
-            continue
-        if any(token in entry for token in invalid_patterns):
-            os.remove(path)
-            cleaned.append(path)
-    if cleaned:
-        logger.info(f"Filesystem repair cleaned {len(cleaned)} artifact(s).")
-    return {"cleaned_count": len(cleaned)}
-
 def initialize_system():
     logger.info("SYSTEM INIT: verifying database integrity...")
     ensure_creators_profile_db()
@@ -364,7 +335,6 @@ def initialize_system():
     if raw_news_posts != normalized_news:
         save_db("news_posts", normalized_news)
 
-    repair_cloudfared_filesystem()
     repair_borrowing_validation_data()
 
 
