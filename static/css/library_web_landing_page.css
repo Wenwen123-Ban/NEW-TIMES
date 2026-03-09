@@ -327,3 +327,7 @@ body::before { content: ""; position: fixed; inset: 0; background: var(--bg-over
 @media (max-width: 768px) {
   .reserve-two-panel { grid-template-columns: 1fr; }
 }
+
+.leaderboard-card { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; padding: 12px; }
+.leader-row { display:flex; justify-content:space-between; gap:8px; padding:8px 0; border-bottom: 1px dashed rgba(255,255,255,0.15); }
+.leader-row:last-child { border-bottom: none; }
