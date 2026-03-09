@@ -269,4 +269,61 @@ body::before { content: ""; position: fixed; inset: 0; background: var(--bg-over
 
 
 .login-modal{max-width:420px;padding:20px;}
-#catalogBooksTable td,#catalogBooksTable th{white-space:nowrap;}
+
+.catalog-toolbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
+.catalog-search {
+  flex: 1;
+  min-width: 220px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(10,22,40,0.7);
+  color: #fff;
+  padding: 10px 14px;
+}
+.catalog-search::placeholder { color: rgba(255,255,255,0.75); }
+.catalog-result-count { font-size: 0.85rem; opacity: 0.9; }
+
+.catalog-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.catalog-pill {
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.catalog-pill.active { background: #ffd54f; color: #111; border-color: #ffd54f; }
+
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.catalog-card {
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 18px;
+  background: rgba(10,22,40,0.64);
+  padding: 14px;
+  cursor: pointer;
+  transition: transform .16s ease;
+}
+.catalog-card:hover { transform: translateY(-2px); }
+.catalog-card-title { margin: 6px 0 2px; font-weight: 700; }
+.catalog-card-author { margin: 0 0 8px; font-size: 0.85rem; opacity: 0.85; }
+.catalog-mini-pill { display:inline-block; padding: 4px 8px; border-radius: 999px; font-size: 0.72rem; background: rgba(255,255,255,0.16); }
+
+.catalog-status-badge { display: inline-block; margin-top: 8px; padding: 5px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.status-available { background: #d1fae5; color: #065f46; }
+.status-reserved { background: #fef3c7; color: #92400e; }
+.status-borrowed { background: #fee2e2; color: #991b1b; }
+
+.book-reserve-modal { max-width: 980px; }
+.reserve-two-panel { display: grid; grid-template-columns: 1fr 1.1fr; gap: 16px; }
+.reserve-book-panel, .reserve-form-panel { border: 1px solid #d7e3f4; border-radius: 16px; padding: 16px; }
+.reserve-label { text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.06em; color: #456; margin-bottom: 6px; }
+.reserve-book-title { margin: 0 0 6px; }
+.reserve-book-author { color: #456; margin-bottom: 8px; }
+.reserve-book-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.book-code-pill, .book-cat-pill { display: inline-block; background: #edf3ff; color: #0f3f7a; border-radius: 999px; padding: 5px 9px; font-size: 0.76rem; }
+
+@media (max-width: 768px) {
+  .reserve-two-panel { grid-template-columns: 1fr; }
+}

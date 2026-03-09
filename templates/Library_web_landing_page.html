@@ -63,12 +63,12 @@
         <h3 class="mb-0">Book Catalog</h3>
         <small class="text-light">Browse publicly. Reserving requires login.</small>
       </div>
-      <div class="table-responsive">
-        <table class="table table-sm table-dark table-striped align-middle mb-0" id="catalogBooksTable">
-          <thead><tr><th>Book #</th><th>Title</th><th>Author</th><th>Category</th><th>Status</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div class="catalog-toolbar">
+        <input id="catalogSearchInput" class="catalog-search" placeholder="Search title, author, or book #" />
+        <div id="catalogResultCount" class="catalog-result-count">0 results</div>
       </div>
+      <div id="catalogCategoryPills" class="catalog-pills"></div>
+      <div id="catalogBookGrid" class="catalog-grid"></div>
     </section>
   </main>
 
@@ -104,6 +104,50 @@
   </button>
 
   <div id="constructionToast" class="construction-toast" role="status" aria-live="polite">To reserve a book, please log in first.</div>
+
+  <div id="bookReserveModal" class="news-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <article class="news-modal-content book-reserve-modal">
+      <button class="news-modal-close" type="button" data-close="bookReserveModal">×</button>
+      <div class="reserve-two-panel">
+        <section class="reserve-book-panel">
+          <p class="reserve-label">Selected Book</p>
+          <h4 id="modalBookTitle" class="reserve-book-title">-</h4>
+          <p id="modalBookAuthor" class="reserve-book-author">-</p>
+          <div class="reserve-book-meta">
+            <span id="modalBookNo" class="book-code-pill"></span>
+            <span id="modalBookCategory" class="book-cat-pill"></span>
+          </div>
+          <span id="modalBookStatus" class="catalog-status-badge">Status</span>
+        </section>
+
+        <section class="reserve-form-panel">
+          <h5 class="mb-3">Reserve this book</h5>
+          <div class="row g-2">
+            <div class="col-12 col-md-6">
+              <label class="form-label small mb-1">Pickup Date</label>
+              <input id="reservePickupDate" type="date" class="form-control" />
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small mb-1">Pickup Time</label>
+              <input id="reservePickupTime" type="time" class="form-control" />
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small mb-1">Contact Type</label>
+              <select id="reserveContactType" class="form-select">
+                <option value="phone">Phone</option>
+                <option value="email">Email</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-8">
+              <label class="form-label small mb-1">Contact Value</label>
+              <input id="reserveContactValue" class="form-control" placeholder="09XXXXXXXXX" />
+            </div>
+          </div>
+          <button id="reserveSubmitBtn" class="btn btn-primary w-100 mt-3">Confirm Reservation</button>
+        </section>
+      </div>
+    </article>
+  </div>
 
   <div id="newsReadModal" class="news-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
     <button class="news-modal-close" type="button" data-close="newsReadModal">×</button>
