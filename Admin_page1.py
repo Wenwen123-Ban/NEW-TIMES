@@ -984,7 +984,6 @@ def api_register_librarian():
     return jsonify({"success": True, "photo": payload})
 
 
-@app.route("/api/register_request", methods=["POST"])
 def api_register_request():
     name = request.form.get("name")
     school_id = str(request.form.get("school_id", "")).strip().lower()
@@ -1030,6 +1029,28 @@ def api_register_request():
     )
     save_db("registration_requests", requests)
     return jsonify({"success": True, "request_id": req_id})
+
+
+# NOTE:
+# `api/auth.py` also registers `/api/register_request` for the newer public
+# registration flow. Register this legacy handler only when that route is not
+# already present to avoid startup route collisions.
+if not any(
+    rule.rule == "/api/register_request" and "POST" in rule.methods
+    for rule in app.url_map.iter_rules()
+):
+    app.add_url_rule(
+        "/api/register_request",
+        view_func=api_register_request,
+        methods=["POST"],
+    )
+
+# Always expose the legacy contract on a dedicated endpoint.
+app.add_url_rule(
+    "/api/register_request_legacy",
+    view_func=api_register_request,
+    methods=["POST"],
+)
 
 
 @app.route("/api/admin/registration-requests")
