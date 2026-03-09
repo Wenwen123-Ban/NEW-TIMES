@@ -1727,11 +1727,9 @@ def api_process_trans():
     data = request.json or {}
     b_no = str(data.get("book_no") or "").strip()
     action = str(data.get("action") or "").strip().lower()
+    request_id = str(data.get("request_id", "")).strip()
     s_id = str(data.get("school_id", "")).strip().lower()
     borrower_name = str(data.get("borrower_name") or "").strip()
-    if not borrower_name:
-        user = find_any_user(s_id)
-        borrower_name = (user or {}).get("name") or s_id
 
     with _db_write_lock:
         books = get_db("books")
@@ -1807,11 +1805,34 @@ def api_process_trans():
         books = get_db("books")
         transactions = get_db("transactions")
 
+        # Resolve reservation owner when school_id is missing from the client payload.
+        if not s_id:
+            reserved_candidates = [
+                tx
+                for tx in transactions
+                if _tx_book_ref(tx) == b_no and _normalize_transaction_status(tx.get("status")) == "reserved"
+            ]
+            if request_id:
+                for tx in reserved_candidates:
+                    if str(tx.get("request_id", "")).strip() == request_id:
+                        s_id = str(tx.get("school_id", "")).strip().lower()
+                        if not borrower_name:
+                            borrower_name = str(tx.get("borrower_name", "")).strip()
+                        break
+            if not s_id and reserved_candidates:
+                reserved_candidates.sort(key=lambda tx: str(tx.get("date") or tx.get("reserved_at") or ""), reverse=True)
+                owner = reserved_candidates[0]
+                s_id = str(owner.get("school_id", "")).strip().lower()
+                if not borrower_name:
+                    borrower_name = str(owner.get("borrower_name", "")).strip()
+
         # check_user
         if not s_id:
             log_borrow_block("missing_school_id", book_no=b_no)
             return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "missing_school_id"}), 400
         user = find_any_user(s_id)
+        if not borrower_name:
+            borrower_name = (user or {}).get("name") or s_id
         if not user:
             log_borrow_block("user_not_found", book_no=b_no, school_id=s_id)
             return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "user_not_found"}), 404
@@ -1833,9 +1854,25 @@ def api_process_trans():
         # check_book_available
         book_status = _normalize_book_status(target_book.get("status"))
         target_book["status"] = book_status
-        if book_status != "available":
+        if book_status not in {"available", "reserved"}:
             log_borrow_block("book_not_available", book_no=b_no, school_id=s_id, book_status=book_status)
             return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "book_not_available", "book_status": book_status}), 409
+
+        if book_status == "reserved":
+            reservation_match = False
+            for tx in transactions:
+                if _tx_book_ref(tx) != b_no:
+                    continue
+                if _normalize_transaction_status(tx.get("status")) != "reserved":
+                    continue
+                same_request = bool(request_id and str(tx.get("request_id", "")).strip() == request_id)
+                same_user = bool(str(tx.get("school_id", "")).strip().lower() == s_id)
+                if same_request or same_user:
+                    reservation_match = True
+                    break
+            if not reservation_match:
+                log_borrow_block("reserved_for_other_user", book_no=b_no, school_id=s_id, request_id=request_id)
+                return jsonify({"success": False, "message": "Unable to borrow for now", "reason": "reserved_for_other_user"}), 409
 
         # check_transaction_conflict
         for tx in transactions:
