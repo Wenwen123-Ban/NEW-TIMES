@@ -56,55 +56,6 @@
       </div>
     </div>
 
-    <div id="reserveModal" class="modal-overlay">
-      <div class="custom-modal text-start">
-        <h4 class="fw-bold text-center mb-1">Reserve Book</h4>
-        <p class="text-muted small text-center mb-4">Complete the reservation request details below.</p>
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">Borrower/User Name</label>
-          <input type="text" id="reserveBorrowerName" class="form-control rounded-pill bg-light border-0 px-3" readonly />
-        </div>
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">User ID</label>
-          <input type="text" id="reserveBorrowerID" class="form-control rounded-pill bg-light border-0 px-3" readonly />
-        </div>
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">Contact Credential <span class="text-danger">*</span></label>
-          <select id="reserveContactType" class="form-select rounded-pill bg-light border-0 px-3 mb-2">
-            <option value="">Select credential type</option>
-            <option value="phone">Input phone number</option>
-            <option value="email">Input email</option>
-          </select>
-          <input type="text" id="reservePhoneNumber" class="form-control rounded-pill bg-light border-0 px-3" placeholder="Select a credential type first" />
-        </div>
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">Book Code</label>
-          <input type="text" id="reserveBookCode" class="form-control rounded-pill bg-light border-0 px-3" readonly />
-        </div>
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">Book Title</label>
-          <input type="text" id="reserveBookTitle" class="form-control rounded-pill bg-light border-0 px-3" readonly />
-        </div>
-        <div class="d-flex gap-2 mb-3">
-          <div style="flex:1">
-            <label class="small fw-bold ms-2">Pickup Date</label>
-            <input type="date" id="reservePickupSchedule" class="form-control rounded-pill bg-light border-0 px-3"/>
-          </div>
-          <div style="flex:1">
-            <label class="small fw-bold ms-2">Pickup Time</label>
-            <input type="time" id="reservePickupTime" class="form-control rounded-pill bg-light border-0 px-3" min="07:00" max="17:00"/>
-          </div>
-        </div>
-        <small class="text-muted ms-2 d-block mb-3">Library hours: 7:00 AM – 5:00 PM</small>
-        <div class="mb-4">
-          <label class="small fw-bold ms-2">Request ID (Auto Generated)</label>
-          <input type="text" id="reserveRequestID" class="form-control rounded-pill bg-light border-0 px-3" readonly />
-        </div>
-        <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 mb-2 shadow-sm" onclick="submitReserveForm()">CONFIRM</button>
-        <button class="btn btn-outline-secondary w-100 rounded-pill fw-bold py-2" onclick="toggleModal('reserveModal', false)">CANCEL</button>
-      </div>
-    </div>
-
     <div id="registerModal" class="modal-overlay">
       <div class="custom-modal text-start">
         <h4 class="fw-bold text-center mb-1">Create Account Request</h4>
@@ -301,67 +252,24 @@
             <i class="fas fa-shield-alt me-1"></i> ADMIN OVERRIDE:
           </h6>
           <div class="small text-muted">
-            You have Staff privileges. You can browse the catalog here, but
-            management tools are located on the <b>Admin Dashboard</b>.
+            You have Staff privileges. Management tools are located on the <b>Admin Dashboard</b>.
           </div>
         </div>
 
-        <div class="btn-group w-100 mb-4 portal-view-switch" role="group">
-          <button
-            class="btn btn-outline-secondary fw-bold active"
-            id="catalogMenuBtn"
-            onclick="switchPortalView('catalog')"
-          >
-            Catalog
-          </button>
-          <button
-            class="btn btn-outline-secondary fw-bold"
-            id="leaderboardMenuBtn"
-            onclick="switchPortalView('leaderboard')"
-          >
-            Leaderboard
-          </button>
+        <div id="catalogSection" style="display:none"></div>
+        <div id="leaderboardSection" style="display:none"></div>
+        <button id="catalogMenuBtn" type="button" style="display:none"></button>
+        <button id="leaderboardMenuBtn" type="button" style="display:none"></button>
+        <div id="reserveModal" style="display:none">
+          <input id="reserveContactType" /><input id="reservePhoneNumber" />
+          <input id="reserveBorrowerName" /><input id="reserveBorrowerID" />
+          <input id="reserveBookCode" /><input id="reserveBookTitle" />
+          <input id="reserveRequestID" /><input id="reservePickupSchedule" /><input id="reservePickupTime" />
         </div>
 
-        <div id="catalogSection">
-          <div class="position-relative mb-4">
-            <input
-              type="text"
-              id="searchBar"
-              class="form-control form-control-lg border-0 shadow-sm rounded-pill ps-5"
-              placeholder="Find books..."
-              onkeyup="loadData()"
-            />
-            <i
-              class="fas fa-search position-absolute text-muted"
-              style="left: 20px; top: 18px"
-            ></i>
-          </div>
-
-          <div class="filter-wrapper" id="catFilterList"></div>
-
-          <div id="bookContainer" class="pb-5"></div>
-        </div>
-
-        <div id="leaderboardSection" style="display: none">
-          <div class="card border-0 shadow-sm p-4 leaderboard-card">
-            <h5 class="fw-bold mb-3">
-              <i class="fas fa-trophy text-warning me-2"></i>Top Borrowers This
-              Month
-            </h5>
-            <div class="table-responsive">
-              <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
-                  <tr class="small text-uppercase">
-                    <th>Rank</th>
-                    <th>Borrower</th>
-                    <th>Total Borrowed</th>
-                  </tr>
-                </thead>
-                <tbody id="leaderboardBorrowersBody"></tbody>
-              </table>
-            </div>
-          </div>
+        <div class="card border-0 shadow-sm p-4">
+          <h5 class="fw-bold mb-2">User Dashboard</h5>
+          <p class="text-muted mb-0">This page now focuses on account details and active borrowing history only. Browse and reserve books from the landing page catalog.</p>
         </div>
       </div>
     </div>

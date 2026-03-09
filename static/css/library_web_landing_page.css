@@ -266,3 +266,7 @@ body::before { content: ""; position: fixed; inset: 0; background: var(--bg-over
     padding: 32px 20px 24px;
   }
 }
+
+
+.login-modal{max-width:420px;padding:20px;}
+#catalogBooksTable td,#catalogBooksTable th{white-space:nowrap;}
