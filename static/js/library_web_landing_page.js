@@ -1,11 +1,15 @@
 (function () {
-  const state = { cards: [], news: [], books: [], auth: null };
+  const state = { cards: [], news: [], books: [], auth: null, selectedBook: null, category: 'All', search: '' };
 
   const homeCardsGrid = document.getElementById('homeCardsGrid');
   const newsDesktopList = document.getElementById('newsDesktopList');
   const newsMobileStrip = document.getElementById('newsMobileStrip');
   const newsReadModal = document.getElementById('newsReadModal');
   const imageLightboxModal = document.getElementById('imageLightboxModal');
+  const catalogSearchInput = document.getElementById('catalogSearchInput');
+  const catalogCategoryPills = document.getElementById('catalogCategoryPills');
+  const catalogResultCount = document.getElementById('catalogResultCount');
+  const catalogBookGrid = document.getElementById('catalogBookGrid');
 
   let aboutModalEscHandler = null;
 
@@ -57,6 +61,22 @@
   function truncate(text, max = 110) {
     const raw = String(text || '').trim();
     return raw.length > max ? `${raw.slice(0, max - 1)}…` : raw;
+  }
+
+  function statusClass(status) {
+    const key = String(status || 'Available').toLowerCase();
+    if (key === 'borrowed') return 'status-borrowed';
+    if (key === 'reserved') return 'status-reserved';
+    return 'status-available';
+  }
+
+  function shuffle(list) {
+    const cloned = [...list];
+    for (let i = cloned.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cloned[i], cloned[j]] = [cloned[j], cloned[i]];
+    }
+    return cloned;
   }
 
   function renderHomeCards() {
@@ -134,15 +154,45 @@
   }
 
   function renderCatalog() {
-    const tbody = document.querySelector('#catalogBooksTable tbody');
-    if (!tbody) return;
-    tbody.innerHTML = state.books.map((book) => {
-      const canReserve = String(book.status || '').toLowerCase() === 'available';
-      return `<tr><td>${safe(book.book_no)}</td><td>${safe(book.title)}</td><td>${safe(book.author)}</td><td>${safe(book.category)}</td><td>${safe(book.status || 'Available')}</td><td><button class="btn btn-sm btn-outline-light reserve-btn" data-book="${safe(book.book_no)}" ${canReserve ? '' : 'disabled'}>Reserve</button></td></tr>`;
-    }).join('') || '<tr><td colspan="6" class="text-center">No books yet.</td></tr>';
+    if (!catalogBookGrid) return;
 
-    tbody.querySelectorAll('.reserve-btn').forEach((btn) => {
-      btn.addEventListener('click', () => handleReserve(btn.dataset.book));
+    const categories = ['All', ...new Set(state.books.map((b) => String(b.category || 'General').trim()).filter(Boolean))];
+    if (catalogCategoryPills) {
+      catalogCategoryPills.innerHTML = categories.map((cat) => `<button class="catalog-pill ${state.category === cat ? 'active' : ''}" data-cat="${safe(cat)}">${safe(cat)}</button>`).join('');
+      catalogCategoryPills.querySelectorAll('.catalog-pill').forEach((pill) => {
+        pill.addEventListener('click', () => {
+          state.category = pill.dataset.cat;
+          renderCatalog();
+        });
+      });
+    }
+
+    const q = state.search.trim().toLowerCase();
+    let filtered = state.books.filter((book) => {
+      const passCategory = state.category === 'All' || String(book.category || 'General').trim() === state.category;
+      const haystack = `${book.book_no || ''} ${book.title || ''} ${book.author || ''}`.toLowerCase();
+      return passCategory && (!q || haystack.includes(q));
+    });
+
+    if (state.category === 'All') filtered = shuffle(filtered);
+
+    if (catalogResultCount) catalogResultCount.textContent = `${filtered.length} result${filtered.length === 1 ? '' : 's'}`;
+
+    catalogBookGrid.innerHTML = filtered.map((book) => `
+      <article class="catalog-card" data-book-no="${safe(book.book_no)}">
+        <span class="catalog-mini-pill">${safe(book.category || 'General')}</span>
+        <h5 class="catalog-card-title">${safe(book.title || 'Untitled')}</h5>
+        <p class="catalog-card-author">${safe(book.author || 'Unknown')}</p>
+        <div><code>${safe(book.book_no)}</code></div>
+        <span class="catalog-status-badge ${statusClass(book.status)}">${safe(book.status || 'Available')}</span>
+      </article>
+    `).join('') || '<p class="placeholder-text">No books found.</p>';
+
+    catalogBookGrid.querySelectorAll('.catalog-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const book = state.books.find((row) => String(row.book_no) === String(card.dataset.bookNo));
+        if (book) openReserveModal(book);
+      });
     });
   }
 
@@ -175,12 +225,32 @@
       return;
     }
 
+    const pickupDate = document.getElementById('reservePickupDate')?.value?.trim();
+    const pickupTime = document.getElementById('reservePickupTime')?.value?.trim();
+    const contactType = document.getElementById('reserveContactType')?.value?.trim() || 'phone';
+    const contactValue = document.getElementById('reserveContactValue')?.value?.trim() || '';
+
+    if (!pickupDate || !pickupTime) return showToast('Please provide pickup date and time.');
+    const [hours] = pickupTime.split(':').map(Number);
+    if (hours < 7 || hours >= 17) return showToast('Pickup time must be within library hours: 7:00 AM – 5:00 PM');
+    if (!contactValue) return showToast('Must fill the credentials!');
+    if (contactType === 'phone' && !/^\d{11}$/.test(contactValue)) return showToast('Phone number must be exactly 11 numbers.');
+    if (contactType === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactValue)) return showToast('Please provide a valid email address.');
+
+    const restrictionRes = await fetch(`/api/date_restrictions/check?date=${encodeURIComponent(pickupDate)}`);
+    const restriction = await restrictionRes.json();
+    if (restriction?.restricted) return showToast(restriction.reason || 'Selected pickup date is restricted.');
+
     const body = {
       book_no: bookNo,
       school_id: state.auth.profile.school_id,
       borrower_name: state.auth.profile.name,
-      pickup_schedule: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-      phone_number: state.auth.profile.phone_number || ''
+      pickup_schedule: `${pickupDate} ${pickupTime}`,
+      phone_number: contactValue,
+      contact_type: contactType,
+      request_id: `REQ-${Date.now().toString(36).toUpperCase()}`,
+      pickup_location: 'Main Library',
+      reservation_note: `${state.selectedBook?.book_no || ''} - ${state.selectedBook?.title || ''}`
     };
 
     const res = await fetch('/api/reserve', {
@@ -190,7 +260,27 @@
     });
     const data = await res.json();
     showToast(data.message || (data.success ? 'Reserved.' : 'Reservation failed.'));
-    if (data.success) loadLandingContent();
+    if (data.success) {
+      toggleModal('bookReserveModal', false);
+      loadLandingContent();
+    }
+  }
+
+  function openReserveModal(book) {
+    state.selectedBook = book;
+    document.getElementById('modalBookTitle').textContent = book.title || 'Untitled';
+    document.getElementById('modalBookAuthor').textContent = `by ${book.author || 'Unknown'}`;
+    document.getElementById('modalBookNo').textContent = book.book_no || '-';
+    document.getElementById('modalBookCategory').textContent = book.category || 'General';
+    const status = document.getElementById('modalBookStatus');
+    status.textContent = book.status || 'Available';
+    status.className = `catalog-status-badge ${statusClass(book.status)}`;
+    document.getElementById('reservePickupDate').value = '';
+    document.getElementById('reservePickupTime').value = '';
+    document.getElementById('reserveContactType').value = 'phone';
+    document.getElementById('reserveContactValue').value = state.auth?.profile?.phone_number || '';
+    document.getElementById('reserveContactValue').placeholder = '09XXXXXXXXX';
+    toggleModal('bookReserveModal', true);
   }
 
   async function loadLandingContent() {
@@ -209,6 +299,18 @@
   }
 
   document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => toggleModal(btn.dataset.close, false)));
+  document.getElementById('reserveContactType')?.addEventListener('change', (e) => {
+    const input = document.getElementById('reserveContactValue');
+    input.placeholder = e.target.value === 'email' ? 'name@example.com' : '09XXXXXXXXX';
+    input.value = '';
+  });
+  document.getElementById('reserveSubmitBtn')?.addEventListener('click', () => {
+    if (state.selectedBook?.book_no) handleReserve(state.selectedBook.book_no);
+  });
+  catalogSearchInput?.addEventListener('input', (e) => {
+    state.search = e.target.value || '';
+    renderCatalog();
+  });
   newsReadModal?.addEventListener('click', (e) => { if (e.target === newsReadModal) toggleModal('newsReadModal', false); });
   imageLightboxModal?.addEventListener('click', (e) => { if (e.target === imageLightboxModal) toggleModal('imageLightboxModal', false); });
 
