@@ -3,118 +3,258 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LBAS Library Landing Page</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <title>LBAS Landing</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/library_web_landing_page.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='library_web_landing_page.css') }}" />
 </head>
-<body>
-  <header class="main-header">
-    <div class="header-content">
-      <div class="logo-section">
-        <img src="https://up.yimg.com/ib/th/id/OIP.3wZU8KYQ9wGoRl3eoloR0QHaHa?pid=Api&rs=1&c=1&qlt=95&w=114&h=114" alt="School Logo" class="school-logo" />
-        <div class="system-title">
-          <h1>Library Borrowing and Assistance System</h1>
-          <p class="mb-0">Welcome to the official library website</p>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <nav class="navbar navbar-expand-lg custom-nav sticky-top">
-    <div class="container">
-      <a class="navbar-brand fw-bold text-light" href="#home">LBAS</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNav" aria-controls="landingNav" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="landingNav">
-        <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-          <li class="nav-item"><a class="nav-link" href="#home">Home</a></li>
-          <li class="nav-item"><a class="nav-link" href="#" onclick="openAboutModal(); return false;">About</a></li>
-          <li class="nav-item"><a class="nav-link" href="#news">News</a></li>
-          <li class="nav-item"><a class="nav-link" href="#catalog">Catalog</a></li>
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Log in</a>
-            <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="{{ url_for('admin_site') }}">Admin Log in</a></li>
-              <li><a class="dropdown-item" href="{{ url_for('lbas_site') }}">Reserve a book</a></li>
-            </ul>
-          </li>
-        </ul>
+<body data-page="landing">
+  <nav class="top-nav">
+    <div class="container nav-wrap">
+      <a href="/" class="brand">LBAS</a>
+      <div class="nav-actions">
+        <a href="/books" class="btn btn-sm btn-primary">Browse Books</a>
+        <button id="openAccountPanel" class="btn btn-sm btn-outline-light">Account</button>
+        <a href="/admin" class="btn btn-sm btn-warning">Admin</a>
       </div>
     </div>
   </nav>
 
-  <main class="landing-main">
-    <section id="home" class="section-card hero-section">
-      <div class="section-head-row"><h2>Home</h2></div>
+  <main class="container py-4">
+    <section class="hero mb-4">
+      <h1>Library Borrowing and Assistance System</h1>
+      <p>Reserve, monitor, and manage library borrowing online.</p>
+      <a href="/books" class="btn btn-light">Browse Books</a>
+    </section>
+
+    <section class="mb-4">
+      <h2>Home Cards</h2>
       <div id="homeCardsGrid" class="home-cards-grid"></div>
     </section>
 
-    <section id="news" class="section-card">
-      <div class="section-head-row"><h3>News</h3></div>
-      <div id="newsDesktopList" class="news-desktop-list"></div>
-      <div id="newsMobileStrip" class="news-mobile-strip"></div>
-      <div id="newsMobileHint" class="news-mobile-hint"><i class="fas fa-arrow-left me-2"></i>Swipe<i class="fas fa-arrow-right ms-2"></i></div>
+    <section class="mb-4">
+      <h2>News</h2>
+      <div id="newsDesktopList" class="news-grid"></div>
     </section>
 
-    <section id="catalog" class="section-card">
-      <h3>Catalog</h3>
-      <div class="table-responsive">
-        <table class="table table-sm table-dark table-striped align-middle mb-0" id="catalogLeaderboardTable">
-          <thead><tr><th>#</th><th>Borrower</th><th>ID</th><th>Total Borrowed</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
+    <section class="mb-5">
+      <h2>Top Borrowers</h2>
+      <table class="table table-dark" id="catalogLeaderboardTable">
+        <thead><tr><th>#</th><th>Name</th><th>ID</th><th>Total</th></tr></thead>
+        <tbody></tbody>
+      </table>
     </section>
   </main>
 
-  <footer class="main-footer">
-    <div class="footer-content">
-      <p class="mb-1">© 2026 Library Borrowing and Assistance System</p>
-      <small>Designed for students and library staff.</small>
-    </div>
-  </footer>
-
-  <button id="aboutTriggerBtn" onclick="openAboutModal()" title="About LBAS" aria-label="About LBAS">
-    <i class="fas fa-info"></i>
-  </button>
-
-  <div id="constructionToast" class="construction-toast" role="status" aria-live="polite">To be made first under website construction.</div>
-
-  <div id="newsReadModal" class="news-modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-    <button class="news-modal-close" type="button" data-close="newsReadModal">×</button>
-    <article class="news-modal-content">
-      <h2 id="newsModalTitle"></h2>
-      <p id="newsModalMeta" class="news-modal-meta"></p>
-      <img id="newsModalImage" class="news-modal-image" alt="Post image" />
-      <p id="newsModalBody" class="news-modal-body"></p>
-    </article>
-  </div>
-
-  <div id="imageLightboxModal" class="news-modal-overlay image-lightbox" role="dialog" aria-modal="true" aria-hidden="true">
-    <button class="news-modal-close" type="button" data-close="imageLightboxModal">×</button>
-    <img id="lightboxImage" class="lightbox-image" alt="Expanded image" />
-  </div>
-
-  <div id="aboutModalBackdrop" role="dialog" aria-modal="true" aria-hidden="true" onclick="if (event.target === this) closeAboutModal();">
-    <div id="aboutModal">
-      <article class="about-modal-card" onclick="event.stopPropagation();">
-        <button class="about-close-x" type="button" onclick="closeAboutModal()" aria-label="Close about modal">×</button>
-        <div class="nav-logo-box mx-auto"><span>LBAS</span></div>
-        <h3 class="about-modal-title">About LBAS</h3>
-        <p class="text-muted small mb-3">Library Borrowing and Assistance System</p>
-        <hr>
-        <p style="font-size:0.92rem; color:#444; line-height:1.7; text-align:center; margin: 16px 0;">LBAS is a school library management system built to help students browse, reserve, and borrow books — whether on campus via school WiFi or from home via the internet. Designed to work fully offline on LAN and online via Cloudflare Tunnel.</p>
-        <div class="about-created-by">Created by</div>
-        <div class="about-creator-pill">LBAS Research Group</div>
-        <p class="text-muted small mb-4">System Version 7.2 Beta</p>
-        <button class="btn w-100 text-white" style="background: var(--blue, #1565c0);" type="button" onclick="closeAboutModal()">Got it!</button>
-      </article>
+  <div id="userLoginModal" class="lbas-modal-backdrop" aria-hidden="true">
+    <div class="lbas-modal-card">
+      <button class="lbas-modal-close" data-close="userLoginModal">×</button>
+      <h3 class="lbas-modal-title">Student Login</h3>
+      <input id="userSchoolId" class="lbas-input" placeholder="School ID" />
+      <button id="verifyOnlyBtn" class="lbas-btn-primary">Verify ID</button>
+      <button id="openSignUpBtn" class="lbas-btn-secondary">Sign Up</button>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="{{ url_for('static', filename='js/library_web_landing_page.js') }}"></script>
+  <!-- SIGN UP MODAL -->
+  <div id="signUpModal" class="lbas-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="lbas-modal-card signup-card">
+      <button class="lbas-modal-close" type="button" id="signUpCloseBtn">×</button>
+      <h3 class="lbas-modal-title">New Library Application</h3>
+      <p class="lbas-modal-subtitle">Request library access from the Librarian.</p>
+      <div class="signup-upload-circle" id="signUpPhotoCircle"><i class="fas fa-camera signup-upload-icon" id="signUpCameraIcon"></i><img id="signUpPhotoPreview" class="signup-photo-preview" src="" alt="Photo preview" hidden /></div>
+      <input type="file" id="signUpPhotoFile" accept="image/*" hidden />
+      <p class="signup-photo-hint">Tap to add ID photo (optional)</p><hr />
+      <div class="lbas-form-group" id="fgSignUpName"><label for="signUpName">Student Name</label><input type="text" id="signUpName" class="lbas-input" placeholder="e.g. Juan Dela Cruz" /></div>
+      <div class="lbas-form-group" id="fgSignUpId"><label for="signUpId">School ID</label><input type="text" id="signUpId" class="lbas-input" placeholder="Type exactly as on your ID" /><small class="signup-field-hint">Enter exactly as printed on your ID card.</small></div>
+      <div class="lbas-form-group" id="fgSignUpLevel"><label>School Level</label><div class="signup-level-options"><label class="signup-radio-label"><input type="radio" name="signUpLevel" id="signUpLevelCollege" value="college" checked />College</label><label class="signup-radio-label"><input type="radio" name="signUpLevel" id="signUpLevelHS" value="highschool" />High School</label></div></div>
+      <div class="lbas-form-group" id="fgSignUpYear"><label for="signUpYear">Year Level</label><select id="signUpYear" class="lbas-input"><option value="">Select Year</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select></div>
+      <div class="lbas-form-group" id="fgSignUpCourse"><label for="signUpCourse">Course</label><select id="signUpCourse" class="lbas-input"><option value="">Loading...</option></select></div>
+      <div class="lbas-form-group" id="fgSignUpContact"><label>Contact for Notifications</label><div class="signup-contact-row"><select id="signUpContactType" class="lbas-input signup-contact-type"><option value="phone">Phone</option><option value="email">Email</option></select><input type="text" id="signUpContactValue" class="lbas-input signup-contact-value" placeholder="09171234567" /></div><small class="signup-field-hint">Used to notify you about unreturned books and announcements.</small></div>
+      <div class="lbas-form-group" id="fgSignUpPassword"><label for="signUpPassword">Password</label><input type="password" id="signUpPassword" class="lbas-input" placeholder="Minimum 6 characters" /></div>
+      <div class="lbas-form-group" id="fgSignUpConfirm"><label for="signUpConfirm">Confirm Password</label><input type="password" id="signUpConfirm" class="lbas-input" placeholder="Re-enter password" /></div>
+      <div class="lbas-form-group" id="fgSignUpReqNum"><label>Request Number</label><div id="signUpReqNumDisplay" class="signup-req-num">Auto-assigned on submit</div><small class="signup-field-hint">Automatically assigned. Use this to follow up your application status.</small></div>
+      <div id="signUpError" class="lbas-error-msg" hidden></div>
+      <div id="signUpSuccess" class="signup-success-msg" hidden><i class="fas fa-check-circle"></i><div><strong>Application Submitted!</strong><p>Your request number is <span id="signUpSuccessReqNum" class="signup-req-num-highlight"></span>. Please wait for the Librarian to review and approve your account. You cannot log in until approved.</p></div></div>
+      <button class="lbas-btn-primary" id="signUpSubmitBtn" type="button"><i class="fas fa-paper-plane"></i> Submit Request</button>
+      <button class="lbas-btn-secondary" id="signUpCancelBtn" type="button">Cancel</button>
+      <div class="lbas-modal-footer-link" id="signUpFooterLink">Already have an account? <a href="#" id="signUpLoginLink">Log in here</a></div>
+    </div>
+  </div>
+
+  <!-- ACCOUNT PANEL OVERLAY -->
+  <div id="accountPanelOverlay" class="account-overlay" aria-hidden="true"><div class="account-panel"><button class="account-panel-close" id="closeAccountPanel">×</button><div class="account-profile-header"><img id="accountPhoto" src="/Profile/default.png" class="account-avatar" alt="Profile" /><div><div id="accountName" class="account-name">-</div><div id="accountId" class="account-id">-</div><div id="accountCourse" class="account-course">-</div></div></div><hr /><div class="account-tabs"><button class="account-tab active" data-tab="reservations">Reservations</button><button class="account-tab" data-tab="borrowed">Borrowed</button><button class="account-tab" data-tab="history">History</button></div><div class="account-tab-content active" id="tabReservations"><div id="reservationsList" class="account-list"><p class="account-empty">No active reservations.</p></div></div><div class="account-tab-content" id="tabBorrowed"><div id="borrowedList" class="account-list"><p class="account-empty">No borrowed books.</p></div></div><div class="account-tab-content" id="tabHistory"><div id="historyList" class="account-list"><p class="account-empty">No history yet.</p></div></div><hr /><button class="lbas-btn-secondary w-100" id="accountLogoutBtn">Log Out</button></div></div>
+
+  <div id="bookStatusPopup" class="status-popup-overlay" aria-hidden="true"><div class="status-popup-card"><button class="lbas-modal-close" id="closeStatusPopup">×</button><div class="status-popup-icon"><i class="fas fa-clock text-warning fa-2x"></i></div><h5 id="statusPopupTitle" class="status-popup-title">Book Currently Borrowed</h5><p id="statusPopupMsg" class="status-popup-msg">The book you reserved is currently borrowed.</p><div id="statusPopupReturnDate" class="status-popup-return"></div></div></div>
+
+  <script src="{{ url_for('static', filename='library_web_landing_page.js') }}"></script>
 </body>
 </html>
+
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->

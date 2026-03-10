@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Books Page</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='Books_page.css') }}" />
+</head>
+<body>
+  <nav class="top-nav"><div class="container nav-wrap"><a href="/" class="brand">LBAS</a><div><button id="openAccountPanel" class="btn btn-outline-light btn-sm">Account</button></div></div></nav>
+  <main class="container py-4">
+    <h1>Books Catalog</h1>
+    <p>Reserve books and track your queue status.</p>
+    <div id="booksGrid" class="row g-3"></div>
+  </main>
+
+  <div id="userLoginModal" class="lbas-modal-backdrop" aria-hidden="true"><div class="lbas-modal-card"><button class="lbas-modal-close" data-close="userLoginModal">×</button><h3 class="lbas-modal-title">Student Login</h3><input id="userSchoolId" class="lbas-input" placeholder="School ID" /><button id="verifyOnlyBtn" class="lbas-btn-primary">Verify ID</button><button id="openSignUpBtn" class="lbas-btn-secondary">Sign Up</button></div></div>
+
+  <!-- BOOK RESERVE MODAL -->
+  <div id="bookReserveModal" class="lbas-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="lbas-modal-card reserve-card">
+      <button class="lbas-modal-close" type="button" data-close="bookReserveModal">×</button>
+      <h3 class="lbas-modal-title">Reserve Book</h3>
+      <div class="reserve-book-info">
+        <div class="reserve-info-row"><span class="reserve-label">Title</span><span id="modalBookTitle" class="reserve-value fw-bold">-</span></div>
+        <div class="reserve-info-row"><span class="reserve-label">Author</span><span id="modalBookAuthor" class="reserve-value">-</span></div>
+        <div class="reserve-info-row"><span class="reserve-label">Code</span><span id="modalBookNo" class="reserve-value font-monospace">-</span></div>
+        <div class="reserve-info-row"><span class="reserve-label">Category</span><span id="modalBookCategory" class="reserve-value">-</span></div>
+        <div class="reserve-info-row"><span class="reserve-label">Status</span><span id="modalBookStatus" class="reserve-value">-</span></div>
+      </div>
+      <div class="reserve-borrower-info">
+        <div class="reserve-info-row"><span class="reserve-label">Name</span><span id="reserveBorrowerName" class="reserve-value">-</span></div>
+        <div class="reserve-info-row"><span class="reserve-label">School ID</span><span id="reserveBorrowerID" class="reserve-value font-monospace">-</span></div>
+      </div>
+      <hr />
+      <div class="lbas-form-group"><label for="reservePickupDate">Pickup Date</label><input type="date" id="reservePickupDate" class="lbas-input" /><div id="reserveDateRestrictionMsg" class="reserve-restriction-msg" hidden></div></div>
+      <div class="lbas-form-group"><label for="reservePickupTime">Pickup Time</label><input type="time" id="reservePickupTime" class="lbas-input" min="08:00" max="17:00" /><small class="signup-field-hint">Library hours: 8:00 AM – 5:00 PM</small></div>
+      <input type="hidden" id="reserveSchoolId" />
+      <div id="reserveError" class="lbas-error-msg" hidden></div>
+      <button class="lbas-btn-primary" id="reserveSubmitBtn" type="button">Confirm Reservation</button>
+      <button class="lbas-btn-secondary" data-close="bookReserveModal" type="button">Cancel</button>
+    </div>
+  </div>
+
+  <!-- SIGN UP MODAL -->
+  <div id="signUpModal" class="lbas-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true"><div class="lbas-modal-card signup-card"><button class="lbas-modal-close" type="button" id="signUpCloseBtn">×</button><h3 class="lbas-modal-title">New Library Application</h3><p class="lbas-modal-subtitle">Request library access from the Librarian.</p><div class="signup-upload-circle" id="signUpPhotoCircle"><i class="fas fa-camera signup-upload-icon" id="signUpCameraIcon"></i><img id="signUpPhotoPreview" class="signup-photo-preview" src="" alt="Photo preview" hidden /></div><input type="file" id="signUpPhotoFile" accept="image/*" hidden /><p class="signup-photo-hint">Tap to add ID photo (optional)</p><hr /><div class="lbas-form-group" id="fgSignUpName"><label for="signUpName">Student Name</label><input type="text" id="signUpName" class="lbas-input" placeholder="e.g. Juan Dela Cruz" /></div><div class="lbas-form-group" id="fgSignUpId"><label for="signUpId">School ID</label><input type="text" id="signUpId" class="lbas-input" placeholder="Type exactly as on your ID" /></div><div class="lbas-form-group" id="fgSignUpLevel"><label>School Level</label><div class="signup-level-options"><label class="signup-radio-label"><input type="radio" name="signUpLevel" id="signUpLevelCollege" value="college" checked />College</label><label class="signup-radio-label"><input type="radio" name="signUpLevel" id="signUpLevelHS" value="highschool" />High School</label></div></div><div class="lbas-form-group" id="fgSignUpYear"><label for="signUpYear">Year Level</label><select id="signUpYear" class="lbas-input"></select></div><div class="lbas-form-group" id="fgSignUpCourse"><label for="signUpCourse">Course</label><select id="signUpCourse" class="lbas-input"></select></div><div class="lbas-form-group" id="fgSignUpContact"><label>Contact for Notifications</label><div class="signup-contact-row"><select id="signUpContactType" class="lbas-input signup-contact-type"><option value="phone">Phone</option><option value="email">Email</option></select><input type="text" id="signUpContactValue" class="lbas-input signup-contact-value" /></div></div><div class="lbas-form-group" id="fgSignUpPassword"><label for="signUpPassword">Password</label><input type="password" id="signUpPassword" class="lbas-input" /></div><div class="lbas-form-group" id="fgSignUpConfirm"><label for="signUpConfirm">Confirm Password</label><input type="password" id="signUpConfirm" class="lbas-input" /></div><div class="lbas-form-group" id="fgSignUpReqNum"><label>Request Number</label><div id="signUpReqNumDisplay" class="signup-req-num">Auto-assigned on submit</div></div><div id="signUpError" class="lbas-error-msg" hidden></div><div id="signUpSuccess" class="signup-success-msg" hidden><i class="fas fa-check-circle"></i><div><strong>Application Submitted!</strong><p>Your request number is <span id="signUpSuccessReqNum" class="signup-req-num-highlight"></span>.</p></div></div><button class="lbas-btn-primary" id="signUpSubmitBtn" type="button">Submit Request</button><button class="lbas-btn-secondary" id="signUpCancelBtn" type="button">Cancel</button><div class="lbas-modal-footer-link" id="signUpFooterLink">Already have an account? <a href="#" id="signUpLoginLink">Log in here</a></div></div></div>
+
+  <div id="accountPanelOverlay" class="account-overlay" aria-hidden="true"><div class="account-panel"><button class="account-panel-close" id="closeAccountPanel">×</button><div class="account-profile-header"><img id="accountPhoto" src="/Profile/default.png" class="account-avatar" alt="Profile" /><div><div id="accountName" class="account-name">-</div><div id="accountId" class="account-id">-</div><div id="accountCourse" class="account-course">-</div></div></div><hr /><div class="account-tabs"><button class="account-tab active" data-tab="reservations">Reservations</button><button class="account-tab" data-tab="borrowed">Borrowed</button><button class="account-tab" data-tab="history">History</button></div><div class="account-tab-content active" id="tabReservations"><div id="reservationsList" class="account-list"></div></div><div class="account-tab-content" id="tabBorrowed"><div id="borrowedList" class="account-list"></div></div><div class="account-tab-content" id="tabHistory"><div id="historyList" class="account-list"></div></div><hr /><button class="lbas-btn-secondary w-100" id="accountLogoutBtn">Log Out</button></div></div>
+
+  <div id="bookStatusPopup" class="status-popup-overlay" aria-hidden="true"><div class="status-popup-card"><button class="lbas-modal-close" id="closeStatusPopup">×</button><div class="status-popup-icon"><i class="fas fa-clock text-warning fa-2x"></i></div><h5 id="statusPopupTitle" class="status-popup-title">Book Currently Borrowed</h5><p id="statusPopupMsg" class="status-popup-msg"></p><div id="statusPopupReturnDate" class="status-popup-return"></div></div></div>
+
+  <script src="{{ url_for('static', filename='Books_page.js') }}"></script>
+</body>
+</html>
+
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->
+<!-- filler -->

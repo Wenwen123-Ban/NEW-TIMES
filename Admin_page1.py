@@ -60,17 +60,24 @@ DB_FILES = {
     "config": "system_config.json",
     "tickets": "tickets.json",  # Password Recovery Registry
     "categories": "categories.json",
-    "date_restricted": "Date_Restricted.json",
-    "reservation_transactions": "reservation_transaction.json",
+    "date_restrictions": "Date_Restricted.json",
+    "reservation_transaction": "reservation_transaction.json",
     "admin_approval_record": "Admin_approval_record.json",
     "registration_requests": "registration_requests.json",
     "log_rec": "log_rec.json",
     "home_cards": "home_cards.json",
     "news_posts": "news_posts.json",
+    "courses": "courses.json",
 }
 
 ACTIVE_SESSIONS = {}
 SESSION_TIMEOUT_HOURS = 2
+
+PH_HOLIDAYS = {
+    "01-01", "04-09", "05-01", "06-12",
+    "08-21", "08-26", "11-01", "11-30",
+    "12-08", "12-25", "12-30"
+}
 
 
 def require_auth():
@@ -244,7 +251,7 @@ def initialize_system():
                 }
             elif key == "categories":
                 initial_data = ["General", "Mathematics", "Science", "Literature"]
-            elif key == "date_restricted":
+            elif key == "date_restrictions":
                 initial_data = {}
             elif key == "log_rec":
                 initial_data = {
@@ -457,55 +464,56 @@ def _ph_holiday_map(year):
 
 
 def _load_manual_date_restrictions():
-    raw = get_db("date_restricted")
+    raw = get_db("date_restrictions")
     if isinstance(raw, dict):
         return raw
     return {}
 
 
 def _save_manual_date_restrictions(payload):
-    save_db("date_restricted", payload if isinstance(payload, dict) else {})
+    save_db("date_restrictions", payload if isinstance(payload, dict) else {})
 
 
 def _get_date_restriction_status(date_str):
-    date_key = _normalize_date_only(date_str)
-    if not date_key:
-        return {"date": "", "restricted": False, "reason": "", "source": "invalid"}
+    if not date_str:
+        return {"restricted": False, "reason": "", "source": "none"}
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return {"restricted": False, "reason": "", "source": "none"}
 
-    day = datetime.strptime(date_key, "%Y-%m-%d")
-    auto_restricted = day.weekday() >= 5
-    auto_reason = "Weekend (Saturday/Sunday)"
+    restrictions = get_db("date_restrictions")
+    if not isinstance(restrictions, dict):
+        restrictions = {}
 
-    holidays = _ph_holiday_map(day.year)
-    if date_key in holidays:
-        auto_restricted = True
-        auto_reason = f"Philippine National Holiday: {holidays[date_key]}"
+    entry = restrictions.get(date_str, {})
+    if isinstance(entry, dict):
+        action = str(entry.get("action", "")).lower()
+        if action == "lift":
+            return {"restricted": False, "reason": "Manual lift", "source": "manual"}
+        if action == "ban":
+            return {
+                "restricted": True,
+                "reason": entry.get("reason", "Date restricted by admin"),
+                "source": "manual",
+            }
 
-    manual = _load_manual_date_restrictions().get(date_key, {})
-    action = str(manual.get("action", "")).strip().lower()
-    reason = str(manual.get("reason", "")).strip()
-
-    if action == "lift":
+    if dt.weekday() >= 5:
         return {
-            "date": date_key,
-            "restricted": False,
-            "reason": reason,
-            "source": "manual_lift",
-        }
-    if action == "ban":
-        return {
-            "date": date_key,
             "restricted": True,
-            "reason": reason,
-            "source": "manual_ban",
+            "reason": "Library closed on weekends",
+            "source": "weekend",
         }
 
-    return {
-        "date": date_key,
-        "restricted": auto_restricted,
-        "reason": auto_reason if auto_restricted else "",
-        "source": "auto" if auto_restricted else "open",
-    }
+    month_day = dt.strftime("%m-%d")
+    if month_day in PH_HOLIDAYS:
+        return {
+            "restricted": True,
+            "reason": "Philippine public holiday",
+            "source": "holiday",
+        }
+
+    return {"restricted": False, "reason": "", "source": "none"}
 
 
 def sanitize_category_name(value):
@@ -547,6 +555,29 @@ def sync_categories_with_books():
         if cat and cat not in categories:
             categories.append(cat)
     return save_categories(categories)
+
+
+
+
+def _is_staff_session_valid():
+    auth_token = request.headers.get("Authorization", "").strip()
+    if auth_token:
+        for uid, sess in list(ACTIVE_SESSIONS.items()):
+            if isinstance(sess, dict) and sess.get("token") == auth_token:
+                if datetime.now() < sess.get("expires", datetime.min):
+                    user = find_any_user(uid)
+                    if user and user.get("is_staff"):
+                        return uid
+        return None
+
+    staff_id = str(request.headers.get("X-School-Id", request.args.get("school_id", ""))).strip().lower()
+    token = str(request.headers.get("X-Session-Token", request.args.get("token", ""))).strip()
+    if not staff_id or not is_session_valid(staff_id, token):
+        return None
+    user = find_any_user(staff_id)
+    if user and user.get("is_staff"):
+        return staff_id
+    return None
 
 
 def find_any_user(s_id):
@@ -715,14 +746,35 @@ def run_auto_sync_engine():
     return books
 
 
+
+def check_unreturned_books():
+    transactions = get_db("transactions")
+    now = datetime.now()
+    changed = False
+    for t in transactions:
+        if str(t.get("status", "")).lower() != "borrowed":
+            continue
+        due_raw = str(t.get("return_due_date", "")).strip()
+        if not due_raw:
+            continue
+        try:
+            due_dt = datetime.strptime(due_raw, "%Y-%m-%d")
+        except ValueError:
+            continue
+        if now.date() > due_dt.date():
+            t["status"] = "unreturned"
+            changed = True
+    if changed:
+        save_db("transactions", transactions)
+
 @app.route("/")
 def index_gateway():
     return render_template("Library_web_landing_page.html")
 
 
 @app.route("/admin")
-def admin_site():
-    # Pre-load data for dashboard
+def admin_dashboard():
+    check_unreturned_books()
     return render_template(
         "admin_dashboard.html",
         books=run_auto_sync_engine(),
@@ -731,19 +783,19 @@ def admin_site():
     )
 
 
-@app.route("/lbas")
-def lbas_site():
-    return render_template("LBAS.html")
+@app.route("/books")
+def books_page():
+    return render_template("Books_page.html")
 
 
 @app.route("/tablet")
 def tablet_kiosk():
-    return redirect(url_for("lbas_site"))
+    return redirect(url_for("books_page"))
 
 
 @app.route("/audit_users")
 def audit_view():
-    return redirect(url_for("admin_site"))
+    return redirect(url_for("admin_dashboard"))
 
 
 
@@ -842,123 +894,143 @@ def api_register_librarian():
 
 @app.route("/api/register_request", methods=["POST"])
 def api_register_request():
-    name = request.form.get("name")
+    import re
+
+    name = str(request.form.get("name", "")).strip()
     school_id = str(request.form.get("school_id", "")).strip().lower()
-    password = request.form.get("password")
-    role = "student"
-    photo = request.files.get("photo")
+    year_level = str(request.form.get("year_level", "")).strip()
+    school_level = str(request.form.get("school_level", "")).strip().lower()
+    course = str(request.form.get("course", "")).strip()
+    contact_type = str(request.form.get("contact_type", "phone")).strip().lower()
+    contact_value = str(request.form.get("contact_value", "")).strip()
+    password = str(request.form.get("password", "")).strip()
+    confirm = str(request.form.get("confirm", "")).strip()
+    photo_file = request.files.get("photo")
 
-    if not name or not school_id or not password:
-        return jsonify({"success": False, "message": "Missing required fields"}), 400
+    if not all([name, school_id, year_level, school_level, password, confirm]):
+        return jsonify({"success": False, "message": "All fields are required."}), 400
+    if len(password) < 6:
+        return jsonify({"success": False, "message": "Password must be at least 6 characters."}), 400
+    if password != confirm:
+        return jsonify({"success": False, "message": "Passwords do not match."}), 400
+
+    if school_level == "college":
+        if year_level not in ["1", "2", "3", "4"]:
+            return jsonify({"success": False, "message": "Invalid year level."}), 400
+        if not course:
+            return jsonify({"success": False, "message": "Please select a course."}), 400
+    elif school_level == "highschool":
+        if year_level not in ["7", "8", "9", "10"]:
+            return jsonify({"success": False, "message": "Invalid grade level."}), 400
+        course = "N/A"
+    else:
+        return jsonify({"success": False, "message": "Invalid school level."}), 400
+
+    if contact_type == "phone":
+        digits = re.sub(r"\D", "", contact_value)
+        if len(digits) < 10:
+            return jsonify({"success": False, "message": "Enter a valid phone number."}), 400
+    elif contact_type == "email":
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", contact_value):
+            return jsonify({"success": False, "message": "Enter a valid email address."}), 400
+    else:
+        return jsonify({"success": False, "message": "Invalid contact type."}), 400
+
     if find_any_user(school_id):
-        return jsonify({"success": False, "message": "ID Exists"}), 400
+        return jsonify({"success": False, "message": "School ID already registered."}), 409
 
-    requests = get_db("registration_requests")
-    if not isinstance(requests, list):
-        requests = []
+    reqs = get_db("registration_requests")
+    if not isinstance(reqs, list):
+        reqs = []
+    if any(str(r.get("school_id", "")).lower() == school_id and str(r.get("status", "")).lower() == "pending" for r in reqs):
+        return jsonify({"success": False, "message": "A pending request already exists for this ID."}), 400
 
-    pending_for_id = next(
-        (
-            row
-            for row in requests
-            if str(row.get("school_id", "")).strip().lower() == school_id
-            and str(row.get("status", "pending")).strip().lower() == "pending"
-        ),
-        None,
-    )
-    if pending_for_id:
-        return jsonify({"success": False, "message": "Existing pending request"}), 400
+    saved_photo = "default.png"
+    if photo_file and photo_file.filename:
+        ext = os.path.splitext(secure_filename(photo_file.filename))[1].lower()
+        if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
+            fname = f"{school_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
+            photo_file.save(os.path.join(PROFILE_FOLDER, fname))
+            saved_photo = fname
 
-    req_id = generate_request_id("REG")
-    saved_photo = save_profile_photo(photo, school_id)
-
-    requests.append(
-        {
-            "request_id": req_id,
-            "name": str(name).strip(),
-            "school_id": school_id,
-            "password": password,
-            "role": role,
-            "photo": saved_photo,
-            "status": "pending",
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        }
-    )
-    save_db("registration_requests", requests)
-    return jsonify({"success": True, "request_id": req_id})
+    req_num = len(reqs) + 1
+    req_num_str = f"{req_num:04d}"
+    reqs.append({
+        "request_id": req_num_str,
+        "request_number": req_num_str,
+        "name": name,
+        "school_id": school_id,
+        "year_level": year_level,
+        "school_level": school_level,
+        "course": course,
+        "contact_type": contact_type,
+        "contact_value": contact_value,
+        "password": password,
+        "photo": saved_photo,
+        "status": "pending",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "reviewed_by": "",
+        "reviewed_at": "",
+    })
+    save_db("registration_requests", reqs)
+    return jsonify({"success": True, "request_number": req_num_str, "message": f"Request #{req_num_str} submitted. Await librarian approval."})
 
 
 @app.route("/api/admin/registration-requests")
-def api_admin_get_registration_requests():
-    if not require_admin_session():
-        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+def api_admin_get_reg_requests():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
     rows = get_db("registration_requests")
     if not isinstance(rows, list):
         rows = []
+    rows.sort(key=lambda r: r.get("created_at", ""), reverse=True)
     return jsonify(rows)
 
 
 @app.route("/api/admin/registration-requests/<request_id>/decision", methods=["POST"])
-def api_admin_decide_registration_request(request_id):
-    admin_id = require_admin_session()
+def api_reg_request_decision(request_id):
+    admin_id = _is_staff_session_valid()
     if not admin_id:
-        return jsonify({"success": False, "message": "Admin authorization required"}), 401
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
 
-    decision = str((request.get_json(silent=True) or {}).get("decision", "")).strip().lower()
-    if decision not in ["approve", "reject"]:
-        return jsonify({"success": False, "message": "Invalid decision"}), 400
+    data = request.json or {}
+    decision = str(data.get("decision", "")).strip().lower()
+    if decision not in ("approve", "reject"):
+        return jsonify({"success": False, "message": "Invalid decision."}), 400
 
-    rows = get_db("registration_requests")
-    if not isinstance(rows, list):
-        rows = []
+    reqs = get_db("registration_requests")
+    req = next((r for r in reqs if str(r.get("request_id", "")) == str(request_id)), None)
+    if not req:
+        return jsonify({"success": False, "message": "Request not found."}), 404
 
-    target = next((row for row in rows if row.get("request_id") == request_id), None)
-    if not target:
-        return jsonify({"success": False, "message": "Request not found"}), 404
-    if str(target.get("status", "pending")).lower() != "pending":
-        return jsonify({"success": False, "message": "Request already resolved"}), 400
+    req["status"] = "approved" if decision == "approve" else "rejected"
+    req["reviewed_by"] = str(admin_id)
+    req["reviewed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    target["reviewed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-    target["reviewed_by"] = admin_id
+    if decision == "approve":
+        users = get_db("users")
+        if not isinstance(users, list):
+            users = []
+        users.append({
+            "name": req.get("name", ""),
+            "school_id": req.get("school_id", ""),
+            "password": req.get("password", ""),
+            "photo": req.get("photo", "default.png"),
+            "year_level": req.get("year_level", ""),
+            "school_level": req.get("school_level", ""),
+            "course": req.get("course", ""),
+            "contact_type": req.get("contact_type", ""),
+            "contact_value": req.get("contact_value", ""),
+            "category": "Student",
+            "status": "approved",
+            "is_staff": False,
+            "phone_number": req.get("contact_value", ""),
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        })
+        save_db("users", users)
 
-    if decision == "reject":
-        target["status"] = "rejected"
-        save_db("registration_requests", rows)
-        return jsonify({"success": True, "decision": "rejected"})
-
-    role = str(target.get("role", "student")).strip().lower()
-    db_key = "admins" if role == "admin" else "users"
-    category = "Staff" if role == "admin" else "Student"
-
-    ok, message = create_account_entry(
-        db_key,
-        category,
-        target.get("name"),
-        target.get("school_id"),
-        target.get("password"),
-        None,
-    )
-    if not ok:
-        return jsonify({"success": False, "message": message}), 400
-
-    registry = get_db(db_key)
-    if isinstance(registry, list):
-        account = next(
-            (
-                row
-                for row in registry
-                if str(row.get("school_id", "")).strip().lower()
-                == str(target.get("school_id", "")).strip().lower()
-            ),
-            None,
-        )
-        if account and target.get("photo"):
-            account["photo"] = target["photo"]
-            save_db(db_key, registry)
-
-    target["status"] = "approved"
-    save_db("registration_requests", rows)
-    return jsonify({"success": True, "decision": "approved"})
+    save_db("registration_requests", reqs)
+    return jsonify({"success": True})
 
 
 @app.route("/api/request_reset", methods=["POST"])
@@ -1052,6 +1124,28 @@ def api_finalize_reset():
 
 
 
+
+
+@app.route("/api/verify_id", methods=["POST"])
+def api_verify_id():
+    data = request.json or {}
+    school_id = str(data.get("school_id", "")).strip().lower()
+    if not school_id:
+        return jsonify({"success": False, "message": "School ID is required."}), 400
+    user = find_any_user(school_id)
+    if not user:
+        return jsonify({"success": False, "message": "School ID not found."}), 404
+    status = str(user.get("status", "")).strip().lower()
+    if status == "pending":
+        return jsonify({"success": False, "message": "Account pending approval."}), 403
+    if status == "rejected":
+        return jsonify({"success": False, "message": "Account not approved."}), 403
+    if user.get("is_staff"):
+        return jsonify({"success": False, "message": "Please use Admin Login."}), 403
+    token = str(uuid.uuid4())
+    ACTIVE_SESSIONS[school_id] = {"token": token, "expires": datetime.now() + timedelta(hours=SESSION_TIMEOUT_HOURS)}
+    return jsonify({"success": True, "token": token, "profile": {"name": user.get("name", school_id), "school_id": school_id, "photo": user.get("photo", "default.png"), "is_staff": False, "phone_number": user.get("phone_number", ""), "year_level": user.get("year_level", ""), "course": user.get("course", ""), "school_level": user.get("school_level", "")}})
+
 @app.route("/api/login", methods=["POST"])
 def api_login():
     data = request.json
@@ -1126,46 +1220,52 @@ def api_logout():
 
 
 @app.route("/api/admin/books")
-def api_admin_get_books():
-    if not require_admin_session():
-        return jsonify({"success": False, "message": "Admin authorization required"}), 401
-    return jsonify(run_auto_sync_engine())
+def api_admin_books():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    check_unreturned_books()
+    return jsonify(get_db("books"))
 
 
 @app.route("/api/admin/users")
-def api_admin_get_users():
-    if not require_admin_session():
-        return jsonify({"success": False, "message": "Admin authorization required"}), 401
-    return jsonify(get_db("users"))
+def api_admin_users():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    users = get_db("users")
+    for u in users:
+        u["type"] = "student"
+    return jsonify(users)
 
 
 @app.route("/api/admin/admins")
-def api_admin_get_admins():
-    if not require_admin_session():
-        return jsonify({"success": False, "message": "Admin authorization required"}), 401
-    return jsonify(get_db("admins"))
+def api_admin_admins():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    admins = get_db("admins")
+    for a in admins:
+        a["type"] = "admin"
+    return jsonify(admins)
 
 
 @app.route("/api/admin/transactions")
-def api_admin_get_transactions():
-    if not require_admin_session():
-        return jsonify({"success": False, "message": "Admin authorization required"}), 401
-    return jsonify(get_db("transactions"))
+def api_admin_transactions():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    check_unreturned_books()
+    txs = get_db("transactions")
+    txs.sort(key=lambda t: t.get("date_reserved", t.get("date", "")), reverse=True)
+    return jsonify(txs)
 
 
 @app.route("/api/admin/approval-records")
-def api_admin_get_approval_records():
-    if not require_admin_session():
-        return jsonify({"success": False, "message": "Admin authorization required"}), 401
-
-    records = get_db("admin_approval_record")
-    if not isinstance(records, list):
-        records = []
-    return jsonify(records)
-
+def api_admin_approval_records():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    return jsonify(get_db("admin_approval_record") or [])
 
 @app.route("/api/books")
 def api_get_books():
+    check_unreturned_books()
     if not require_auth():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
 
@@ -1499,179 +1599,124 @@ def api_cancel_reservation():
 
 @app.route("/api/process_transaction", methods=["POST"])
 def api_process_trans():
-    """
-    MASTER TRANSACTION HANDLER
-    Restored: Now handles 'borrow' logic for Kiosk/Tablet.
-    """
+    check_unreturned_books()
     if not require_auth():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
 
     data = request.json or {}
     b_no = data.get("book_no")
-    action = data.get("action")  # 'borrow' or 'return'
+    action = str(data.get("action", "")).strip().lower()
     s_id = str(data.get("school_id", "")).strip().lower()
-    borrower_name = str(data.get("borrower_name") or "").strip()
-    if not borrower_name:
-        user = find_any_user(s_id)
-        borrower_name = (user or {}).get("name") or s_id
 
     with _db_write_lock:
         books = get_db("books")
         transactions = get_db("transactions")
 
-        # LOGIC 1: RETURN
         if action == "return":
-            target_request_id = str(data.get("request_id", "")).strip()
-            target_school_id = str(data.get("school_id", "")).strip().lower()
-            matched_transaction = False
-            normalize = lambda value: str(value or "").strip().lower()
+            target_book = next((b for b in books if b.get("book_no") == b_no), None)
+            reservation_id = str(data.get("reservation_id", "")).strip()
+            target_sid = str(data.get("school_id", "")).strip().lower()
+            matched = None
+            if reservation_id:
+                matched = next((t for t in transactions if t.get("reservation_id") == reservation_id and str(t.get("status", "")).lower() in ("borrowed", "unreturned")), None)
+            if not matched and target_sid:
+                matched = next((t for t in transactions if t.get("book_no") == b_no and str(t.get("school_id", "")).lower() == target_sid and str(t.get("status", "")).lower() in ("borrowed", "unreturned")), None)
+            if not matched:
+                matched = next((t for t in transactions if t.get("book_no") == b_no and str(t.get("status", "")).lower() in ("borrowed", "unreturned")), None)
 
-            for b in books:
-                if b["book_no"] == b_no:
-                    b["status"] = "Available"
+            now = datetime.now()
+            if matched:
+                matched["status"] = "returned"
+                matched["return_date"] = now.strftime("%Y-%m-%d %H:%M")
+
+            approval_log = get_db("admin_approval_record")
+            if isinstance(approval_log, list):
+                for row in approval_log:
+                    if row.get("book_no") == b_no and str(row.get("status", "")).lower() in ("borrowed", "unreturned"):
+                        row["status"] = "returned"
+                        row["return_date"] = now.strftime("%Y-%m-%d %H:%M")
+                save_db("admin_approval_record", approval_log)
+
+            still_reserved = [t for t in transactions if t.get("book_no") == b_no and str(t.get("status", "")).lower() == "reserved"]
+            if still_reserved and target_book:
+                target_book["status"] = "reserved"
+            elif target_book:
+                target_book["status"] = "available"
+
+        elif action == "borrow":
+            target_book = next((b for b in books if b.get("book_no") == b_no), None)
+            return_due_date = str(data.get("return_due_date", "")).strip()
+            approved_by = str(data.get("approved_by", "")).strip()
+            reservation_id = str(data.get("reservation_id", "")).strip()
+
+            if not return_due_date:
+                return jsonify({"success": False, "message": "Return due date required."}), 400
+
+            ret_restriction = _get_date_restriction_status(return_due_date)
+            if ret_restriction["restricted"]:
+                return jsonify({"success": False, "message": f"Return date restricted: {ret_restriction['reason']}"}), 400
+
+            reserved_for_book = [t for t in transactions if t.get("book_no") == b_no and str(t.get("status", "")).lower() == "reserved"]
+            chosen_tx = None
+            if reservation_id:
+                chosen_tx = next((t for t in reserved_for_book if t.get("reservation_id") == reservation_id), None)
+            if not chosen_tx and s_id:
+                chosen_tx = next((t for t in reserved_for_book if str(t.get("school_id", "")).lower() == s_id), None)
+            if not chosen_tx and reserved_for_book:
+                reserved_for_book.sort(key=lambda t: (t.get("pickup_date", "9999-12-31"), t.get("pickup_time", "23:59"), t.get("date_reserved", "")))
+                chosen_tx = reserved_for_book[0]
+
+            if not target_book:
+                return jsonify({"success": False, "message": "Book not found."}), 404
+            if str(target_book.get("status", "")).lower() == "borrowed":
+                return jsonify({"success": False, "message": "Book already borrowed."}), 400
+
+            now = datetime.now()
+            chosen_sid = str(chosen_tx.get("school_id", "")).lower() if chosen_tx else s_id
+            if chosen_tx:
+                chosen_tx["status"] = "converted"
+
             for t in transactions:
-                if t["book_no"] != b_no or normalize(t.get("status")) not in ["reserved", "borrowed"]:
-                    continue
+                if t.get("book_no") == b_no and str(t.get("status", "")).lower() == "reserved" and t is not chosen_tx:
+                    pickup = t.get("pickup_date", "9999-12-31")
+                    if pickup >= now.strftime("%Y-%m-%d"):
+                        t["status"] = "unavailable"
+                        t["unavailable_reason"] = "Book was borrowed before your pickup date. Please wait for the return announcement."
+                        t["unavailable_at"] = now.strftime("%Y-%m-%d %H:%M")
 
-                tx_request_id = str(t.get("request_id", "")).strip()
-                tx_school_id = str(t.get("school_id", "")).strip().lower()
-                request_id_match = bool(target_request_id and tx_request_id and tx_request_id == target_request_id)
-                school_id_match = bool(not target_request_id and target_school_id and tx_school_id == target_school_id)
+            target_book["status"] = "borrowed"
+            try:
+                due_dt = datetime.strptime(return_due_date, "%Y-%m-%d")
+            except ValueError:
+                due_dt = now + timedelta(days=7)
 
-                if target_request_id and not request_id_match:
-                    continue
-                if not target_request_id and target_school_id and not school_id_match:
-                    continue
-
-                if normalize(t.get("status")) == "borrowed":
-                    matched_transaction = True
-
-                t["status"] = "Returned"
-                t["return_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-
+            borrow_record = {
+                "reservation_id": chosen_tx.get("reservation_id", "") if chosen_tx else f"BRW-{b_no}-{now.strftime('%Y%m%d%H%M%S')}",
+                "book_no": b_no,
+                "title": target_book.get("title", ""),
+                "school_id": chosen_sid,
+                "borrower_name": chosen_tx.get("borrower_name", "") if chosen_tx else s_id,
+                "contact_type": chosen_tx.get("contact_type", "") if chosen_tx else "",
+                "contact_value": chosen_tx.get("contact_value", "") if chosen_tx else "",
+                "status": "borrowed",
+                "date_reserved": chosen_tx.get("date_reserved", "") if chosen_tx else "",
+                "date_borrowed": now.strftime("%Y-%m-%d %H:%M"),
+                "pickup_date": chosen_tx.get("pickup_date", "") if chosen_tx else "",
+                "pickup_time": chosen_tx.get("pickup_time", "") if chosen_tx else "",
+                "pickup_location": chosen_tx.get("pickup_location", "Main Library") if chosen_tx else "Main Library",
+                "return_due_date": due_dt.strftime("%Y-%m-%d"),
+                "return_date": "",
+                "approved_by": approved_by,
+                "cancelled_at": "",
+                "reservation_note": chosen_tx.get("reservation_note", "") if chosen_tx else "",
+                "queue_position": chosen_tx.get("queue_position", 1) if chosen_tx else 1,
+            }
+            transactions.append(borrow_record)
             approval_log = get_db("admin_approval_record")
             if not isinstance(approval_log, list):
                 approval_log = []
-            approval_changed = False
-            for row in approval_log:
-                if row.get("book_no") != b_no or normalize(row.get("status")) != "borrowed":
-                    continue
-
-                row_request_id = str(row.get("request_id", "")).strip()
-                row_school_id = str(row.get("school_id", "")).strip().lower()
-                request_id_match = bool(target_request_id and row_request_id and row_request_id == target_request_id)
-                school_id_match = bool(not target_request_id and target_school_id and row_school_id == target_school_id)
-
-                if target_request_id and not request_id_match:
-                    continue
-                if not target_request_id and target_school_id and not school_id_match:
-                    continue
-
-                row["status"] = "Returned"
-                row["return_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                approval_changed = True
-
-            if approval_changed:
-                save_db("admin_approval_record", approval_log)
-
-            if target_request_id and not matched_transaction:
-                return jsonify({"success": False, "message": "Matching borrowed record not found"}), 404
-
-        # LOGIC 2: BORROW (Restored for Tablet)
-        elif action == "borrow":
-            target_book = next((b for b in books if b["book_no"] == b_no), None)
-            return_due_date = str(data.get("return_due_date", "")).strip()
-            return_date_status = _get_date_restriction_status(return_due_date)
-            if return_date_status.get("restricted"):
-                reason = return_date_status.get("reason") or "Selected return date is restricted."
-                return jsonify({"success": False, "message": reason}), 400
-
-            reserved_candidates = [
-                t for t in transactions if t.get("book_no") == b_no and t.get("status") == "Reserved"
-            ]
-
-            def _reservation_sort_key(tx):
-                created_raw = str(tx.get("date") or "").strip()
-                try:
-                    created_dt = datetime.strptime(created_raw, "%Y-%m-%d %H:%M")
-                except ValueError:
-                    created_dt = datetime.max
-                return _pickup_sort_key(tx), created_dt
-
-            reserved_candidates.sort(key=_reservation_sort_key)
-            reserved_transaction = reserved_candidates[0] if reserved_candidates else None
-
-            if not s_id and reserved_transaction:
-                s_id = str(reserved_transaction.get("school_id", "")).strip().lower()
-
-            if s_id:
-                selected = next(
-                    (
-                        tx
-                        for tx in reserved_candidates
-                        if str(tx.get("school_id", "")).strip().lower() == s_id
-                    ),
-                    None,
-                )
-                if selected:
-                    reserved_transaction = selected
-
-            pickup_schedule = str((reserved_transaction or {}).get("pickup_schedule", "")).strip()
-            if pickup_schedule and return_due_date and return_due_date < pickup_schedule.split(" ")[0]:
-                return jsonify({"success": False, "message": "You have picked backward! Pick a date forward!"}), 400
-
-            can_borrow = target_book and target_book.get("status") != "Borrowed"
-
-            if can_borrow and reserved_transaction:
-                target_book["status"] = "Borrowed"
-                chosen_school_id = str(reserved_transaction.get("school_id", "")).strip().lower()
-
-                for t in transactions:
-                    if t["book_no"] == b_no and t["status"] == "Reserved":
-                        t_school_id = str(t.get("school_id", "")).strip().lower()
-                        if t_school_id == chosen_school_id:
-                            t["status"] = "Converted"
-                        else:
-                            pickup_at = datetime.now().strftime("%Y-%m-%d %H:%M")
-                            t["status"] = "Unavailable"
-                            t["unavailable_reason"] = "This book was borrowed by another user before your reserved pickup date."
-                            t["unavailable_at"] = pickup_at
-                            t["pickup_at"] = pickup_at
-                            t["borrowed_by"] = (reserved_transaction or {}).get("borrower_name", "") or borrower_name
-
-                now = datetime.now()
-                try:
-                    parsed_due_date = datetime.strptime(return_due_date, "%Y-%m-%d") if return_due_date else (now + timedelta(days=2))
-                except ValueError:
-                    parsed_due_date = now + timedelta(days=2)
-
-                approved_record = {
-                    "book_no": b_no,
-                    "title": (target_book or {}).get("title", ""),
-                    "school_id": chosen_school_id,
-                    "status": "Borrowed",
-                    "date": now.strftime("%Y-%m-%d %H:%M"),
-                    "expiry": parsed_due_date.strftime("%Y-%m-%d"),
-                    "pickup_location": (reserved_transaction or {}).get("pickup_location", ""),
-                    "pickup_schedule": (reserved_transaction or {}).get("pickup_schedule", ""),
-                    "reservation_note": (reserved_transaction or {}).get("reservation_note", ""),
-                    "borrower_name": (reserved_transaction or {}).get("borrower_name", "") or borrower_name,
-                    "phone_number": (reserved_transaction or {}).get("phone_number", ""),
-                    "reserved_at": (reserved_transaction or {}).get("date", ""),
-                    "request_id": (reserved_transaction or {}).get("request_id")
-                    or str(data.get("request_id", "")).strip()
-                    or generate_request_id(),
-                    "approved_by": str(data.get("approved_by", "")).strip() or "System Librarian",
-                }
-                transactions.append(approved_record)
-
-                approval_log = get_db("admin_approval_record")
-                if not isinstance(approval_log, list):
-                    approval_log = []
-                approval_log.append(approved_record)
-                save_db("admin_approval_record", approval_log)
-            else:
-                return jsonify({"success": False, "message": "Book Unavailable"}), 400
+            approval_log.append(borrow_record)
+            save_db("admin_approval_record", approval_log)
 
         save_db("books", books)
         save_db("transactions", transactions)
@@ -1685,87 +1730,94 @@ def api_reserve():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
 
     data = request.json or {}
-    b_no = data.get("book_no")
+    b_no = str(data.get("book_no", "")).strip()
     s_id = str(data.get("school_id", "")).strip().lower()
+    pickup_date = str(data.get("pickup_date", "")).strip()
+    pickup_time = str(data.get("pickup_time", "")).strip()
+    contact_type = str(data.get("contact_type", "phone")).strip().lower()
+    contact_value = str(data.get("contact_value", "")).strip()
+    borrower_name = str(data.get("borrower_name", "")).strip()
+
+    if not all([b_no, s_id, pickup_date, pickup_time]):
+        return jsonify({"success": False, "message": "Missing required fields."}), 400
+
+    restriction = _get_date_restriction_status(pickup_date)
+    if restriction["restricted"]:
+        return jsonify({"success": False, "message": f"Cannot reserve on this date: {restriction['reason']}"}), 400
+
+    books = get_db("books")
+    transactions = get_db("transactions")
     now = datetime.now()
-    request_id = str(data.get("request_id", "")).strip() or generate_request_id()
-    pickup_schedule = str(data.get("pickup_schedule", "")).strip()
-    pickup_date = pickup_schedule.split(" ")[0] if pickup_schedule else ""
-    borrower_name = str(data.get("borrower_name") or "").strip()
-    if not borrower_name:
-        user = find_any_user(s_id)
-        borrower_name = (user or {}).get("name") or s_id
+    target_book = next((b for b in books if b.get("book_no") == b_no), None)
+    if not target_book:
+        return jsonify({"success": False, "message": "Book not found."}), 404
 
-    pickup_date_status = _get_date_restriction_status(pickup_date)
-    if pickup_date_status.get("restricted"):
-        reason = pickup_date_status.get("reason") or "Selected pickup date is restricted."
-        return jsonify({"success": False, "status": "error", "message": reason}), 400
+    if str(target_book.get("status", "")).lower() == "borrowed":
+        return jsonify({"success": False, "message": "Book is currently borrowed. You can still reserve it and will be queued."}), 400
 
-    contact_type = str(data.get("contact_type", "")).strip().lower()
-    contact_value = str(data.get("phone_number", "")).strip()
-    if contact_type not in {"phone", "email"} or not contact_value:
-        return jsonify({"success": False, "status": "error", "message": "Must fill the credentials!"}), 400
-    if contact_type == "phone" and not re.fullmatch(r"\d{11}", contact_value):
-        return jsonify({"success": False, "status": "error", "message": "Phone number must be exactly 11 numbers."}), 400
-    if contact_type == "email" and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", contact_value):
-        return jsonify({"success": False, "status": "error", "message": "Please provide a valid email address."}), 400
+    active = [t for t in transactions if str(t.get("school_id", "")).lower() == s_id and t.get("book_no") == b_no and str(t.get("status", "")).lower() == "reserved"]
+    if active:
+        return jsonify({"success": False, "message": "You already have an active reservation for this book."}), 400
 
-    with _db_write_lock:
-        books = get_db("books")
-        transactions = get_db("transactions")
+    all_active = [t for t in transactions if str(t.get("school_id", "")).lower() == s_id and str(t.get("status", "")).lower() == "reserved"]
+    if len(all_active) >= 5:
+        return jsonify({"success": False, "message": "Reservation limit reached (5 maximum)."}), 400
 
-        target_book = next((b for b in books if b.get("book_no") == b_no), None)
-        if not target_book:
-            return jsonify({"success": False, "status": "error", "message": "Book not found."}), 404
+    book_reservations = [t for t in transactions if t.get("book_no") == b_no]
+    seq = len(book_reservations) + 1
+    safe_book_no = re.sub(r"[^A-Za-z0-9]", "", b_no)
+    reservation_id = f"RES-{safe_book_no}-{seq:03d}"
 
-        if str(target_book.get("status", "")).strip().lower() == "borrowed":
-            return jsonify({"success": False, "status": "error", "message": "This book is currently borrowed."}), 409
+    current_reserved = [t for t in transactions if t.get("book_no") == b_no and str(t.get("status", "")).lower() == "reserved"]
+    current_reserved.sort(key=lambda t: (t.get("pickup_date", "9999-12-31"), t.get("pickup_time", "23:59"), t.get("date_reserved", "")))
+    queue_position = len(current_reserved) + 1
 
-        active_reservations = [
-            t
-            for t in transactions
-            if str(t.get("school_id", "")).strip().lower() == s_id
-            and str(t.get("status", "")).strip().lower() in {"reserved", "borrowed"}
-        ]
+    for b in books:
+        if b.get("book_no") == b_no and str(b.get("status", "")).lower() == "available":
+            b["status"] = "reserved"
 
-        if any(str(t.get("book_no", "")).strip() == str(b_no).strip() and str(t.get("status", "")).strip().lower() == "reserved" for t in active_reservations):
-            return jsonify({"success": False, "status": "error", "message": "You already have an active reservation for this book."}), 400
+    new_tx = {
+        "reservation_id": reservation_id,
+        "book_no": b_no,
+        "title": target_book.get("title", ""),
+        "school_id": s_id,
+        "borrower_name": borrower_name or s_id,
+        "contact_type": contact_type,
+        "contact_value": contact_value,
+        "status": "reserved",
+        "date_reserved": now.strftime("%Y-%m-%d %H:%M"),
+        "pickup_date": pickup_date,
+        "pickup_time": pickup_time,
+        "pickup_location": "Main Library",
+        "return_due_date": "",
+        "return_date": "",
+        "approved_by": "",
+        "date_borrowed": "",
+        "cancelled_at": "",
+        "reservation_note": str(data.get("reservation_note", "")).strip(),
+        "queue_position": queue_position,
+    }
+    transactions.append(new_tx)
+    save_db("books", books)
+    save_db("transactions", transactions)
+    res_txs = get_db("reservation_transaction")
+    if not isinstance(res_txs, list):
+        res_txs = []
+    res_txs.append(new_tx)
+    save_db("reservation_transaction", res_txs)
 
-        user_reserved_count = sum(1 for t in active_reservations if str(t.get("status", "")).strip().lower() == "reserved")
-        if user_reserved_count >= 5:
-            return jsonify({"success": False, "status": "error", "message": "Reservation limit reached (5 max)."}), 400
+    return jsonify({"success": True, "reservation_id": reservation_id, "queue_position": queue_position, "message": f"Reserved! You are #{queue_position} in queue. Pickup: {pickup_date} at {pickup_time}."})
 
-        if str(target_book.get("status", "")).strip().lower() == "available":
-            target_book["status"] = "Reserved"
 
-        reservation_payload = {
-            "book_no": b_no,
-            "title": target_book.get("title", ""),
-            "school_id": s_id,
-            "status": "Reserved",
-            "date": now.strftime("%Y-%m-%d %H:%M"),
-            "expiry": None,
-            "borrower_name": borrower_name,
-            "phone_number": contact_value,
-            "contact_type": contact_type,
-            "pickup_location": str(data.get("pickup_location", "")).strip(),
-            "pickup_schedule": pickup_schedule,
-            "reservation_note": str(data.get("reservation_note", "")).strip(),
-            "request_id": request_id,
-        }
-        transactions.append(reservation_payload)
-
-        save_db("books", books)
-        save_db("transactions", transactions)
-
-        reservation_log = get_db("reservation_transactions")
-        if not isinstance(reservation_log, list):
-            reservation_log = []
-        reservation_log.append(reservation_payload)
-        save_db("reservation_transactions", reservation_log)
-
-    record_system_event("reserve", s_id)
-    return jsonify({"success": True, "request_id": request_id})
+@app.route("/api/my_reservations")
+def api_my_reservations():
+    s_id = require_auth()
+    if not s_id:
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    transactions = get_db("transactions")
+    my_txs = [t for t in transactions if str(t.get("school_id", "")).lower() == s_id]
+    my_txs.sort(key=lambda t: t.get("date_reserved", t.get("date", "")), reverse=True)
+    return jsonify({"success": True, "transactions": my_txs})
 
 
 @app.route("/api/monthly_activity_logs")
@@ -1884,79 +1936,43 @@ def _build_monthly_leaderboard_payload(limit=10):
     return {"top_borrowers": top_borrowers, "top_books": top_books}
 
 
-@app.route("/api/date_restrictions")
-def api_date_restrictions():
-    year = int(request.args.get("year", datetime.now().year))
-    month = request.args.get("month")
-    items = []
-
-    if month:
-        start = datetime(year, int(month), 1)
-        end = start + timedelta(days=31)
-        while end.month == start.month:
-            end += timedelta(days=1)
-    else:
-        start = datetime(year, 1, 1)
-        end = datetime(year + 1, 1, 1)
-
-    cursor = start
-    while cursor < end:
-        status = _get_date_restriction_status(cursor.strftime("%Y-%m-%d"))
-        items.append(status)
-        cursor += timedelta(days=1)
-
-    return jsonify({"success": True, "items": items})
+@app.route("/api/date_restrictions", methods=["GET"])
+def api_get_date_restrictions():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    return jsonify(get_db("date_restrictions") or {})
 
 
 @app.route("/api/date_restrictions/set", methods=["POST"])
 def api_set_date_restriction():
-    if not require_auth():
+    if not _is_staff_session_valid():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
-
     data = request.json or {}
-    date_key = _normalize_date_only(data.get("date"))
+    date_str = str(data.get("date", "")).strip()
     action = str(data.get("action", "")).strip().lower()
     reason = str(data.get("reason", "")).strip()
-    if not date_key or action not in {"ban", "lift", "reset"}:
-        return jsonify({"success": False, "message": "Invalid request"}), 400
-
-    restrictions = _load_manual_date_restrictions()
+    if not date_str or action not in ("ban", "lift", "reset"):
+        return jsonify({"success": False, "message": "Invalid parameters."}), 400
+    restrictions = get_db("date_restrictions")
+    if not isinstance(restrictions, dict):
+        restrictions = {}
     if action == "reset":
-        restrictions.pop(date_key, None)
+        restrictions.pop(date_str, None)
     else:
-        restrictions[date_key] = {
+        restrictions[date_str] = {
             "action": action,
             "reason": reason,
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "set_by": str(_is_staff_session_valid()),
+            "set_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         }
-    _save_manual_date_restrictions(restrictions)
-
-    return jsonify({"success": True, "item": _get_date_restriction_status(date_key)})
+    save_db("date_restrictions", restrictions)
+    return jsonify({"success": True})
 
 
 @app.route("/api/date_restrictions/check")
-def api_check_date_restriction():
-    date_key = _normalize_date_only(request.args.get("date"))
-    if not date_key:
-        return jsonify({"success": False, "message": "date is required"}), 400
-    status = _get_date_restriction_status(date_key)
-    return jsonify({"success": True, **status})
-
-
-def _is_staff_session_valid():
-    """Checks active staff session for protected leaderboard APIs."""
-    staff_id = (
-        str(request.headers.get("X-School-Id", request.args.get("school_id", "")))
-        .strip()
-        .lower()
-    )
-    token = str(
-        request.headers.get("X-Session-Token", request.args.get("token", ""))
-    ).strip()
-    if not staff_id or not is_session_valid(staff_id, token):
-        return False
-    user = find_any_user(staff_id)
-    return bool(user and user.get("is_staff"))
+def api_check_date():
+    date_str = request.args.get("date", "")
+    return jsonify(_get_date_restriction_status(date_str))
 
 
 @app.route("/api/leaderboard/top-borrowers")
@@ -2079,6 +2095,25 @@ def _normalize_news_posts(raw_posts):
     return normalized
 
 
+@app.route("/api/courses")
+def api_get_courses():
+    return jsonify(get_db("courses") or {"courses": ["BSIT", "BSAM", "BSIS"], "hs_grades": [7, 8, 9, 10], "college_years": [1, 2, 3, 4]})
+
+
+@app.route("/api/admin/courses", methods=["POST"])
+def api_admin_save_courses():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    data = request.json or {}
+    courses = data.get("courses", [])
+    if not isinstance(courses, list):
+        return jsonify({"success": False, "message": "courses must be a list."}), 400
+    existing = get_db("courses") or {}
+    existing["courses"] = [str(c).strip() for c in courses if str(c).strip()]
+    save_db("courses", existing)
+    return jsonify({"success": True, "courses": existing["courses"]})
+
+
 @app.route("/api/home_cards")
 def api_get_home_cards():
     cards = _normalize_home_cards(get_db("home_cards"))
@@ -2188,6 +2223,11 @@ def api_delete_news_post(post_id):
 
     save_db("news_posts", posts)
     return jsonify({"success": True, "posts": posts})
+
+
+@app.route("/LandingUploads/<path:filename>")
+def serve_landing_upload(filename):
+    return send_from_directory(LANDING_UPLOAD_FOLDER, filename)
 
 
 @app.route("/Profile/<path:filename>")
