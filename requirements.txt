@@ -1,0 +1,5 @@
+flask==3.0.3
+django==4.2.16
+mysqlclient==2.2.4
+waitress==3.0.0
+werkzeug==3.0.3
