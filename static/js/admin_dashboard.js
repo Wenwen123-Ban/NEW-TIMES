@@ -855,11 +855,13 @@ let editModal;
         if (!record) return alert('Borrowed approval record not found.');
 
         document.getElementById('transactionModalTitle').innerText = `Borrowed Approval • ${record.book_no || '-'}`;
+        const contactType = String(record.contact_type || '').trim().toLowerCase();
+        const contactLabel = contactType === 'email' ? 'Email' : 'Phone';
         document.getElementById('transactionModalBody').innerHTML = `
             <div class="small">
                 <div><span class="fw-bold text-dark">Book:</span> ${record.title || '-'} (${record.book_no || '-'})</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Borrower:</span> ${record.borrower_name || '-'} (${record.school_id || '-'})</div>
-                <div class="mt-1"><span class="fw-bold text-dark">Phone:</span> ${record.phone_number || '-'}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">${contactLabel}:</span> ${record.phone_number || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Pickup Date:</span> ${pickupDateOnly(record.pickup_schedule)}</div><div class="mt-1"><span class="fw-bold text-dark">Pickup Time:</span> ${pickupTimeOnly(record.pickup_schedule)}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Borrowed Date:</span> ${record.date || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Return Due:</span> ${record.expiry || '-'}</div>

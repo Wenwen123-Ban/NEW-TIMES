@@ -1269,9 +1269,6 @@ def api_admin_get_approval_records():
 
 @app.route("/api/books")
 def api_get_books():
-    if not require_auth():
-        return jsonify({"success": False, "message": "Unauthorized"}), 401
-
     books = run_auto_sync_engine()
     if not isinstance(books, list):
         books = []
@@ -1760,6 +1757,7 @@ def api_process_trans():
                     "reservation_note": (reserved_transaction or {}).get("reservation_note", ""),
                     "borrower_name": (reserved_transaction or {}).get("borrower_name", "") or borrower_name,
                     "phone_number": (reserved_transaction or {}).get("phone_number", ""),
+                    "contact_type": (reserved_transaction or {}).get("contact_type", ""),
                     "reserved_at": (reserved_transaction or {}).get("date", ""),
                     "request_id": (reserved_transaction or {}).get("request_id")
                     or str(data.get("request_id", "")).strip()
@@ -1831,8 +1829,12 @@ def api_reserve():
             and str(t.get("status", "")).strip().lower() in {"reserved", "borrowed"}
         ]
 
-        if any(str(t.get("book_no", "")).strip() == str(b_no).strip() and str(t.get("status", "")).strip().lower() == "reserved" for t in active_reservations):
-            return jsonify({"success": False, "status": "error", "message": "You already have an active reservation for this book."}), 400
+        if any(
+            str(t.get("book_no", "")).strip() == str(b_no).strip()
+            and str(t.get("school_id", "")).strip().lower() == s_id
+            for t in transactions
+        ):
+            return jsonify({"success": False, "status": "error", "message": "You already reserved this specific book before. Duplicate reservation is not allowed."}), 400
 
         user_reserved_count = sum(1 for t in active_reservations if str(t.get("status", "")).strip().lower() == "reserved")
         if user_reserved_count >= 5:
