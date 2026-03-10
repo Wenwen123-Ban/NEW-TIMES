@@ -19,6 +19,7 @@ let currentID = null;
       let allCollectionOrder = [];
       let categoryCollectionOrder = {};
       let lbasInitialized = false;
+      let hasShownSessionNotice = false;
       let accountSwipeStartX = null;
       let accountSwipeStartY = null;
       let accountSwipeCloseTriggered = false;
@@ -219,6 +220,13 @@ let currentID = null;
       }
 
       function renderActiveLeases() {
+        if (!currentID) {
+          const reservationCountNode = document.getElementById("reservationCount");
+          if (reservationCountNode) reservationCountNode.textContent = "0";
+          const activeHistory = document.getElementById("activeHistory");
+          if (activeHistory) activeHistory.innerHTML = '<p class="text-muted small text-center mt-3 border p-3 rounded-3 dashed">Log in to view active reservations.</p>';
+          return;
+        }
         const key = getReservationKey(currentID);
         const active = cleanupExpiredLeasesForUser(key)
           .slice()
@@ -276,8 +284,10 @@ let currentID = null;
           const tRes = await fetch("/api/transactions");
           console.log("[LBAS] fetch <- /api/transactions", tRes.status);
           const trans = parseTransactionPayload(await tRes.json());
-          syncUserReservations(trans, currentID);
-          syncUserActiveLeases(trans, currentID);
+          if (currentID) {
+            syncUserReservations(trans, currentID);
+            syncUserActiveLeases(trans, currentID);
+          }
           renderActiveLeases();
         } catch (e) {
           console.error("Unable to refresh reservations.");
@@ -394,6 +404,32 @@ let currentID = null;
       });
 
 
+      function updateAuthMenus() {
+        const isLoggedIn = isAuthenticatedUser();
+        const authToggle = document.getElementById("lbasAuthToggle");
+        const adminItem = document.getElementById("lbasAdminLoginItem");
+        const authAction = document.getElementById("lbasAuthAction");
+
+        if (authToggle) authToggle.textContent = isLoggedIn ? "Account" : "Log in";
+        if (adminItem) adminItem.style.display = isLoggedIn ? "none" : "";
+        if (authAction) {
+          authAction.textContent = isLoggedIn ? "Log out" : "Log in";
+          authAction.href = isLoggedIn ? "#" : "#loginSection";
+          authAction.onclick = isLoggedIn ? () => { logout(); return false; } : null;
+        }
+      }
+
+      function notifySessionAutoLogout() {
+        if (hasShownSessionNotice) return;
+        hasShownSessionNotice = true;
+        showStatusPopup(
+          "warning",
+          "Session Notice",
+          "For account safety, your session will automatically log out when you leave this page or close the browser.",
+        );
+      }
+
+
       function isAuthenticatedUser() {
         return Boolean(currentID && currentToken);
       }
@@ -431,7 +467,10 @@ let currentID = null;
 
           currentID = schoolID;
           currentToken = data.token;
+          localStorage.setItem("lbas_id", schoolID);
+          localStorage.setItem("lbas_token", data.token);
           isGuestMode = false;
+          notifySessionAutoLogout();
           initPortal(data.profile);
           toggleModal("reserveLoginModal", false);
           if (pendingReserveBookNo) {
@@ -473,6 +512,7 @@ let currentID = null;
             currentToken = data.token;
             localStorage.setItem("lbas_id", id);
             localStorage.setItem("lbas_token", currentToken);
+            notifySessionAutoLogout();
             initPortal(data.profile);
           } else {
             err.style.display = "block";
@@ -643,6 +683,7 @@ let currentID = null;
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("portalSection").style.display = "block";
 
+        updateAuthMenus();
         currentProfile = profile;
         const isLibrarian = profile.category === "Staff";
 
@@ -681,7 +722,6 @@ let currentID = null;
       }
 
       async function loadData() {
-        if (!currentID) return;
         try {
           await fetchCategories();
           const authHeaders = currentToken
@@ -713,8 +753,10 @@ let currentID = null;
             acc[book.book_no] = book;
             return acc;
           }, {});
-          syncUserReservations(trans, currentID);
-          syncUserActiveLeases(trans, currentID);
+          if (currentID) {
+            syncUserReservations(trans, currentID);
+            syncUserActiveLeases(trans, currentID);
+          }
           const search = document
             .getElementById("searchBar")
             .value.toLowerCase();
@@ -1373,7 +1415,7 @@ let currentID = null;
           if (Date.now() - tapStart < 220) closeAccountModal();
         }, { passive: true });
       }
-      function logout() {
+      async function logout() {
         if (dataInterval) {
           clearInterval(dataInterval);
           dataInterval = null;
@@ -1383,6 +1425,7 @@ let currentID = null;
           timerInterval = null;
         }
 
+        const tokenToRevoke = currentToken;
         currentID = null;
         currentToken = null;
         userReservations = {};
@@ -1395,6 +1438,15 @@ let currentID = null;
 
         localStorage.removeItem("lbas_id");
         localStorage.removeItem("lbas_token");
+        updateAuthMenus();
+
+        if (tokenToRevoke) {
+          try {
+            await fetch("/api/logout", { method: "POST", headers: { Authorization: tokenToRevoke } });
+          } catch (_error) {
+            console.warn("Unable to contact logout endpoint.");
+          }
+        }
 
         document.getElementById("portalSection").style.display = "none";
         document.getElementById("loginSection").style.display = "flex";
@@ -1447,6 +1499,7 @@ let currentID = null;
         hydrateDisplaySettings();
         document.getElementById("loginSection").style.display = "none";
         document.getElementById("portalSection").style.display = "block";
+        updateAuthMenus();
         document.getElementById("display_name").innerText = "Guest";
         document.getElementById("full_name").innerText = "Guest User";
         document.getElementById("id_val").innerText = "ID: -";

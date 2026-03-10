@@ -66,6 +66,34 @@
         position: relative;
         z-index: 1;
       }
+
+      .custom-nav {
+        background: rgba(10, 22, 40, 0.92);
+        backdrop-filter: blur(2px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        z-index: 1500;
+      }
+
+      .custom-nav .nav-link,
+      .custom-nav .dropdown-toggle,
+      .custom-nav .navbar-brand {
+        color: #e9f2ff !important;
+        font-weight: 600;
+      }
+
+      .custom-nav .nav-link:hover,
+      .custom-nav .dropdown-item:hover {
+        color: #38bdf8 !important;
+      }
+
+      .custom-nav .navbar-toggler {
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+
+      .custom-nav .navbar-toggler-icon {
+        filter: invert(1);
+      }
+
       .network-banner {
         background: var(--primary);
         color: var(--accent);
@@ -822,7 +850,11 @@
         }
 
         .mobile-nav {
-          padding: 12px 14px;
+          padding: 10px 12px;
+        }
+
+        .custom-nav .navbar-brand {
+          font-size: 1rem;
         }
 
         .main-footer {
@@ -836,8 +868,13 @@
         }
 
         .book-item {
-          padding: 14px;
+          padding: 12px;
           margin-bottom: 0;
+        }
+
+        .btn-action {
+          padding: 10px;
+          font-size: 0.9rem;
         }
 
         .book-item,

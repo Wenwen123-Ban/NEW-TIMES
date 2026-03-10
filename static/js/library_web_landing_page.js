@@ -192,6 +192,36 @@
     });
   }
 
+
+  function updateAuthMenus() {
+    const token = localStorage.getItem('lbas_token');
+    const isLoggedIn = !!token;
+
+    const landingToggle = document.getElementById('landingAuthToggle');
+    const landingAdminItem = document.getElementById('landingAdminLoginItem');
+    const landingAction = document.getElementById('landingAuthAction');
+
+    if (landingToggle) landingToggle.textContent = isLoggedIn ? 'Account' : 'Log in';
+    if (landingAdminItem) landingAdminItem.style.display = isLoggedIn ? 'none' : '';
+    if (landingAction) {
+      landingAction.textContent = isLoggedIn ? 'Log out' : 'Log in';
+      landingAction.href = isLoggedIn ? '#' : '/lbas';
+      landingAction.onclick = isLoggedIn
+        ? async function (event) {
+            event.preventDefault();
+            try {
+              await fetch('/api/logout', { method: 'POST', headers: { Authorization: token } });
+            } catch (_e) {
+              console.warn('Logout request failed.');
+            }
+            localStorage.removeItem('lbas_id');
+            localStorage.removeItem('lbas_token');
+            updateAuthMenus();
+          }
+        : null;
+    }
+  }
+
   function renderLeaderboard(rows) {
     const tbody = document.querySelector('#catalogLeaderboardTable tbody');
     if (!tbody) return;
@@ -237,6 +267,7 @@
   document.getElementById('signUpLevelCollege')?.addEventListener('change', handleSignUpLevelChange);
   document.getElementById('signUpLevelHS')?.addEventListener('change', handleSignUpLevelChange);
   loadLandingContent();
+  updateAuthMenus();
 
 
   document.addEventListener('DOMContentLoaded', function () {
