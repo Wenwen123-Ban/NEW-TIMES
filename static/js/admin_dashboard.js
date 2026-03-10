@@ -101,6 +101,7 @@ let editModal;
     let transactionDetailModal;
     let borrowModal;
     let registrationRequestModal;
+    let masterCourses = [];
     let dashboardInitialized = false;
 
     function initializeDashboard() {
@@ -158,14 +159,15 @@ let editModal;
         try {
             const preservedFilterCat = activeFilterCat;
             console.log('[ADMIN] fetch -> /api/admin/books /api/admin/users /api/admin/admins /api/admin/transactions /api/categories /api/admin/approval-records /api/admin/registration-requests');
-            const [bRes, uRes, aRes, tRes, cRes, approvalRes, registrationRes] = await Promise.all([
+            const [bRes, uRes, aRes, tRes, cRes, approvalRes, registrationRes, coursesRes] = await Promise.all([
                 apiFetch('/api/admin/books', { method: 'GET' }, false),
                 apiFetch('/api/admin/users', { method: 'GET' }, false), 
                 apiFetch('/api/admin/admins', { method: 'GET' }, false),
                 apiFetch('/api/admin/transactions', { method: 'GET' }, false),
                 apiFetch('/api/categories', { method: 'GET' }, false),
                 apiFetch('/api/admin/approval-records', { method: 'GET' }, false),
-                apiFetch('/api/admin/registration-requests', { method: 'GET' }, false)
+                apiFetch('/api/admin/registration-requests', { method: 'GET' }, false),
+                apiFetch('/api/courses', { method: 'GET' }, false)
             ]);
             console.log('[ADMIN] fetch <- statuses', { books: bRes.status, users: uRes.status, admins: aRes.status, transactions: tRes.status, categories: cRes.status, approvals: approvalRes.status, registrations: registrationRes.status });
 
@@ -176,6 +178,8 @@ let editModal;
             masterCategories = await cRes.json();
             masterApprovalRecords = await approvalRes.json();
             masterRegistrationRequests = await registrationRes.json();
+            const coursesData = await coursesRes.json();
+            masterCourses = Array.isArray(coursesData?.courses) ? coursesData.courses : [];
 
             if (!Array.isArray(masterBooks)) masterBooks = [];
             if (!Array.isArray(masterAdmins)) masterAdmins = [];
@@ -195,6 +199,7 @@ let editModal;
             renderUsersList();
             renderRegistrationRequestBadge();
             renderRegistrationRequests();
+            renderCourseTags();
             await loadNewsPosts();
             renderBorrowedBooksList();
             renderBookRegistrationStats();
@@ -683,22 +688,66 @@ let editModal;
         const body = document.getElementById('registrationRequestsBody');
         if (!body) return;
 
-        const requests = (masterRegistrationRequests || [])
-            .filter((row) => String(row.status || 'pending').toLowerCase() === 'pending')
-            .reverse();
-
-        body.innerHTML = requests.map((row) => `
-            <tr>
-                <td class="ps-4"><code class="fw-bold text-dark">${row.request_id || '-'}</code></td>
-                <td><img src="/Profile/${row.photo || 'default.png'}" class="user-row-img shadow-sm"></td>
+        const requests = (masterRegistrationRequests || []).slice().reverse();
+        body.innerHTML = requests.map((row) => {
+            const status = String(row.status || 'pending').toLowerCase();
+            const reqNum = row.request_number ? `#${row.request_number}` : '-';
+            return `<tr>
+                <td class="ps-4 fw-bold">${reqNum}</td>
                 <td class="fw-bold">${row.name || '-'}</td>
                 <td><code class="fw-bold text-dark">${row.school_id || '-'}</code></td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openRegistrationRequest('${row.request_id}')">Open</button>
-                </td>
-            </tr>
-        `).join('') || '<tr><td colspan="5" class="text-center py-4 text-muted">No pending registration requests.</td></tr>';
+                <td>${row.year_level || '-'}</td>
+                <td>${row.course || '-'}</td>
+                <td>${row.school_level || '-'}</td>
+                <td><span class="status-pill badge-${status}">${status}</span></td>
+                <td>${status === 'pending' ? `<button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openRegistrationRequest('${row.request_id}')">Open</button>` : '-'}</td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="8" class="text-center py-4 text-muted">No registration requests.</td></tr>';
     }
+
+    function renderCourseTags() {
+        const box = document.getElementById('courseTagsContainer');
+        if (!box) return;
+        box.innerHTML = (masterCourses || []).map((course, idx) => `<span class="badge bg-light text-dark border">${course} <button class="btn btn-sm p-0 ms-1" onclick="removeCourseTag(${idx})">&times;</button></span>`).join('') || '<span class="text-muted small">No courses configured.</span>';
+    }
+
+    async function saveCourses() {
+        try {
+            const res = await apiFetch('/api/admin/courses', {
+                method: 'POST',
+                body: JSON.stringify({ courses: masterCourses }),
+                headers: {
+                    'X-School-Id': staffSessionID || localStorage.getItem('adminSchoolId') || '',
+                    'X-Session-Token': staffSessionToken || localStorage.getItem('adminToken') || ''
+                }
+            }, false);
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                alert(data.message || 'Failed to save courses.');
+                return;
+            }
+            masterCourses = data.courses || [];
+            renderCourseTags();
+        } catch (error) {
+            console.error(error);
+            alert('Unable to save courses right now.');
+        }
+    }
+
+    function addCourseTag() {
+        const input = document.getElementById('courseInput');
+        const value = String(input?.value || '').trim();
+        if (!value) return;
+        if (!masterCourses.includes(value)) masterCourses.push(value);
+        if (input) input.value = '';
+        saveCourses();
+    }
+
+    function removeCourseTag(index) {
+        masterCourses.splice(index, 1);
+        saveCourses();
+    }
+
 
     function openRegistrationRequest(requestID) {
         const row = (masterRegistrationRequests || []).find((req) => req.request_id === requestID);
@@ -712,7 +761,7 @@ let editModal;
                 <div><span class="fw-bold text-dark">Request ID:</span> ${row.request_id || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Profile Name:</span> ${row.name || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">ID:</span> ${row.school_id || '-'}</div>
-                <div class="mt-1"><span class="fw-bold text-dark">Requested Role:</span> ${(row.role || 'student').toUpperCase()}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">Year:</span> ${row.year_level || '-'}</div><div class="mt-1"><span class="fw-bold text-dark">Course:</span> ${row.course || '-'}</div><div class="mt-1"><span class="fw-bold text-dark">School Level:</span> ${row.school_level || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Created:</span> ${row.created_at || '-'}</div>
             </div>
             <div class="d-flex gap-2 mt-4">
@@ -1443,3 +1492,6 @@ let editModal;
         );
         renderInventory(filtered);
     }
+
+window.addCourseTag = addCourseTag;
+window.removeCourseTag = removeCourseTag;

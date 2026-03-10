@@ -1,0 +1,5 @@
+{
+  "courses": ["BSIT", "BSAM", "BSIS"],
+  "hs_grades": [7, 8, 9, 10],
+  "college_years": [1, 2, 3, 4]
+}
