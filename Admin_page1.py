@@ -67,6 +67,7 @@ DB_FILES = {
     "log_rec": "log_rec.json",
     "home_cards": "home_cards.json",
     "news_posts": "news_posts.json",
+    "courses": "courses.json",
 }
 
 ACTIVE_SESSIONS = {}
@@ -152,6 +153,36 @@ def sanitize_creator_name(value):
 def generate_request_id(prefix="REQ"):
     rand = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return f"{prefix}-{datetime.now().strftime('%Y%m%d')}-{rand}"
+
+
+def get_next_approved_request_number():
+    reqs = get_db("registration_requests")
+    if not isinstance(reqs, list):
+        reqs = []
+    approved_count = sum(
+        1 for r in reqs if str(r.get("status", "")).lower() == "approved"
+    )
+    return f"{approved_count + 1:04d}"
+
+
+def recalculate_request_numbers(reqs):
+    """
+    Reassign request_number to approved requests only, in chronological order.
+    Pending and rejected retain tagged submission numbers for clarity.
+    """
+    counter = 1
+    for r in sorted(reqs, key=lambda x: x.get("created_at", "")):
+        status = str(r.get("status", "")).lower()
+        raw_num = str(r.get("request_number", "")).strip() or "?"
+        base_num = raw_num[2:] if raw_num[:2] in {"R-", "P-"} else raw_num
+        if status == "approved":
+            r["request_number"] = f"{counter:04d}"
+            counter += 1
+        elif status == "rejected":
+            r["request_number"] = f"R-{base_num}"
+        elif status == "pending":
+            r["request_number"] = f"P-{base_num}" if raw_num.startswith("P-") else base_num
+    return reqs
 
 
 def save_profile_photo(photo, school_id):
@@ -250,6 +281,12 @@ def initialize_system():
                 initial_data = {
                     "month": datetime.now().strftime("%Y-%m"),
                     "events": [],
+                }
+            elif key == "courses":
+                initial_data = {
+                    "courses": ["BSIT", "BSAM", "BSIS"],
+                    "hs_grades": [7, 8, 9, 10],
+                    "college_years": [1, 2, 3, 4],
                 }
             else:
                 initial_data = []
@@ -840,52 +877,126 @@ def api_register_librarian():
     return jsonify({"success": True, "photo": payload})
 
 
+
+
+@app.route("/api/courses")
+def api_courses():
+    data = get_db("courses")
+    if not isinstance(data, dict):
+        data = {
+            "courses": ["BSIT", "BSAM", "BSIS"],
+            "hs_grades": [7, 8, 9, 10],
+            "college_years": [1, 2, 3, 4],
+        }
+    return jsonify(data)
+
+
+@app.route("/api/admin/courses", methods=["POST"])
+def api_admin_courses():
+    if not _is_staff_session_valid():
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    courses = payload.get("courses")
+    if not isinstance(courses, list):
+        return jsonify({"success": False, "message": "courses must be an array"}), 400
+
+    cleaned = []
+    for item in courses:
+        text = str(item).strip()
+        if not text:
+            return jsonify({"success": False, "message": "courses must contain non-empty strings"}), 400
+        cleaned.append(text)
+
+    existing = get_db("courses")
+    hs_grades = [7, 8, 9, 10]
+    college_years = [1, 2, 3, 4]
+    if isinstance(existing, dict):
+        hs_grades = existing.get("hs_grades", hs_grades)
+        college_years = existing.get("college_years", college_years)
+
+    save_db("courses", {
+        "courses": cleaned,
+        "hs_grades": hs_grades,
+        "college_years": college_years,
+    })
+    return jsonify({"success": True, "courses": cleaned})
+
 @app.route("/api/register_request", methods=["POST"])
 def api_register_request():
-    name = request.form.get("name")
+    name = str(request.form.get("name", "")).strip()
     school_id = str(request.form.get("school_id", "")).strip().lower()
-    password = request.form.get("password")
-    role = "student"
-    photo = request.files.get("photo")
+    year_level = str(request.form.get("year_level", "")).strip()
+    school_level = str(request.form.get("school_level", "")).strip().lower()
+    course = str(request.form.get("course", "")).strip()
+    password = str(request.form.get("password", "")).strip()
+    confirm = str(request.form.get("confirm", "")).strip()
+    photo_file = request.files.get("photo")
 
-    if not name or not school_id or not password:
-        return jsonify({"success": False, "message": "Missing required fields"}), 400
+    if not all([name, school_id, year_level, school_level, password, confirm]):
+        return jsonify({"success": False, "message": "All fields are required."}), 400
+    if len(password) < 6:
+        return jsonify({"success": False, "message": "Password must be at least 6 characters."}), 400
+    if password != confirm:
+        return jsonify({"success": False, "message": "Passwords do not match."}), 400
+
+    if school_level == "college":
+        if year_level not in ["1", "2", "3", "4"]:
+            return jsonify({"success": False, "message": "Invalid year level for college."}), 400
+        if not course:
+            return jsonify({"success": False, "message": "Please select a course."}), 400
+    elif school_level == "highschool":
+        if year_level not in ["7", "8", "9", "10"]:
+            return jsonify({"success": False, "message": "Invalid grade level for high school."}), 400
+        course = "N/A"
+    else:
+        return jsonify({"success": False, "message": "Invalid school level."}), 400
+
     if find_any_user(school_id):
-        return jsonify({"success": False, "message": "ID Exists"}), 400
+        return jsonify({"success": False, "message": "School ID already registered."}), 409
 
-    requests = get_db("registration_requests")
-    if not isinstance(requests, list):
-        requests = []
+    reqs = get_db("registration_requests")
+    if not isinstance(reqs, list):
+        reqs = []
 
-    pending_for_id = next(
-        (
-            row
-            for row in requests
-            if str(row.get("school_id", "")).strip().lower() == school_id
-            and str(row.get("status", "pending")).strip().lower() == "pending"
-        ),
-        None,
-    )
-    if pending_for_id:
-        return jsonify({"success": False, "message": "Existing pending request"}), 400
+    if any(
+        str(r.get("school_id", "")).lower() == school_id and str(r.get("status", "")).lower() == "pending"
+        for r in reqs
+    ):
+        return jsonify({"success": False, "message": "A pending request already exists for this ID."}), 400
 
-    req_id = generate_request_id("REG")
-    saved_photo = save_profile_photo(photo, school_id)
+    saved_photo = "default.png"
+    if photo_file and photo_file.filename:
+        ext = os.path.splitext(secure_filename(photo_file.filename))[1].lower()
+        if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
+            fname = f"{school_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
+            photo_file.save(os.path.join(PROFILE_FOLDER, fname))
+            saved_photo = fname
 
-    requests.append(
-        {
-            "request_id": req_id,
-            "name": str(name).strip(),
-            "school_id": school_id,
-            "password": password,
-            "role": role,
-            "photo": saved_photo,
-            "status": "pending",
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        }
-    )
-    save_db("registration_requests", requests)
-    return jsonify({"success": True, "request_id": req_id})
+    temp_num = len(reqs) + 1
+    req_id = f"REG-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
+
+    reqs.append({
+        "request_number": f"{temp_num:04d}",
+        "request_id": req_id,
+        "name": name,
+        "school_id": school_id,
+        "year_level": year_level,
+        "school_level": school_level,
+        "course": course,
+        "password": password,
+        "photo": saved_photo,
+        "status": "pending",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "reviewed_by": "",
+        "reviewed_at": "",
+    })
+    save_db("registration_requests", reqs)
+    return jsonify({
+        "success": True,
+        "request_number": f"{temp_num:04d}",
+        "message": f"Request #{temp_num:04d} submitted. Await admin approval.",
+    })
 
 
 @app.route("/api/admin/registration-requests")
@@ -923,40 +1034,32 @@ def api_admin_decide_registration_request(request_id):
 
     if decision == "reject":
         target["status"] = "rejected"
+        rows = recalculate_request_numbers(rows)
         save_db("registration_requests", rows)
         return jsonify({"success": True, "decision": "rejected"})
 
-    role = str(target.get("role", "student")).strip().lower()
-    db_key = "admins" if role == "admin" else "users"
-    category = "Staff" if role == "admin" else "Student"
+    users = get_db("users")
+    if not isinstance(users, list):
+        users = []
 
-    ok, message = create_account_entry(
-        db_key,
-        category,
-        target.get("name"),
-        target.get("school_id"),
-        target.get("password"),
-        None,
-    )
-    if not ok:
-        return jsonify({"success": False, "message": message}), 400
-
-    registry = get_db(db_key)
-    if isinstance(registry, list):
-        account = next(
-            (
-                row
-                for row in registry
-                if str(row.get("school_id", "")).strip().lower()
-                == str(target.get("school_id", "")).strip().lower()
-            ),
-            None,
-        )
-        if account and target.get("photo"):
-            account["photo"] = target["photo"]
-            save_db(db_key, registry)
+    users.append({
+        "name": target.get("name", ""),
+        "school_id": target.get("school_id", ""),
+        "password": target.get("password", ""),
+        "photo": target.get("photo", "default.png"),
+        "year_level": target.get("year_level", ""),
+        "school_level": target.get("school_level", ""),
+        "course": target.get("course", ""),
+        "category": "Student",
+        "status": "approved",
+        "is_staff": False,
+        "phone_number": "",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+    })
+    save_db("users", users)
 
     target["status"] = "approved"
+    rows = recalculate_request_numbers(rows)
     save_db("registration_requests", rows)
     return jsonify({"success": True, "decision": "approved"})
 

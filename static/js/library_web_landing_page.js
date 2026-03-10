@@ -49,6 +49,43 @@
     document.body.style.overflow = show ? 'hidden' : '';
   }
 
+
+  async function loadCoursesIntoSelect() {
+    try {
+      const res = await fetch('/api/courses');
+      const data = await res.json();
+      const courses = data.courses || [];
+      const select = document.getElementById('signUpCourse');
+      if (!select) return;
+      select.innerHTML = '<option value="">Select Course</option>' + courses.map((c) => `<option value="${c}">${c}</option>`).join('');
+    } catch (_e) {
+      console.warn('Could not load courses');
+    }
+  }
+
+  function handleSignUpLevelChange() {
+    const isHS = document.getElementById('signUpLevelHS')?.checked;
+    const yearSelect = document.getElementById('signUpYear');
+    const courseSelect = document.getElementById('signUpCourse');
+    const fgCourse = document.getElementById('fgSignUpCourse');
+    if (!yearSelect) return;
+    if (isHS) {
+      yearSelect.innerHTML = '<option value="">Select Grade</option>' + [7, 8, 9, 10].map((g) => `<option value="${g}">Grade ${g}</option>`).join('');
+      if (courseSelect) courseSelect.innerHTML = '<option value="N/A">N/A</option>';
+      if (fgCourse) {
+        fgCourse.style.opacity = '0.5';
+        fgCourse.style.pointerEvents = 'none';
+      }
+    } else {
+      yearSelect.innerHTML = '<option value="">Select Year</option>' + [1, 2, 3, 4].map((y) => `<option value="${y}">${y === 1 ? '1st' : y === 2 ? '2nd' : y === 3 ? '3rd' : '4th'} Year</option>`).join('');
+      loadCoursesIntoSelect();
+      if (fgCourse) {
+        fgCourse.style.opacity = '1';
+        fgCourse.style.pointerEvents = 'auto';
+      }
+    }
+  }
+
   function truncate(text, max = 110) {
     const raw = String(text || '').trim();
     return raw.length > max ? `${raw.slice(0, max - 1)}…` : raw;
@@ -197,6 +234,8 @@
     if (e.target === imageLightboxModal) toggleModal('imageLightboxModal', false);
   });
 
+  document.getElementById('signUpLevelCollege')?.addEventListener('change', handleSignUpLevelChange);
+  document.getElementById('signUpLevelHS')?.addEventListener('change', handleSignUpLevelChange);
   loadLandingContent();
 
 

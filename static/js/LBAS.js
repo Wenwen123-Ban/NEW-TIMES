@@ -1063,63 +1063,134 @@ let currentID = null;
         }
       }
 
-      async function submitRegistrationRequest() {
-        const name = document.getElementById("regName")?.value.trim();
-        const schoolID = document.getElementById("regID")?.value.trim();
-        const password = document.getElementById("regPass")?.value;
-        const photo = document.getElementById("regPhoto")?.files?.[0];
-        const submitButton = document.querySelector('#registerModal button[onclick="submitRegistrationRequest()"]');
-
-        if (!name || !schoolID || !password) {
-          alert("Please fill out Profile Name, ID, and Password.");
-          return;
-        }
-
-        const form = new FormData();
-        form.append("name", name);
-        form.append("school_id", schoolID);
-        form.append("password", password);
-        form.append("role", "student");
-        if (photo) form.append("photo", photo);
-
+      async function loadCoursesIntoSelect() {
         try {
-          if (submitButton) {
-            submitButton.disabled = true;
-            submitButton.textContent = "SUBMITTING...";
-          }
+          const res = await fetch('/api/courses');
+          const data = await res.json();
+          const courses = data.courses || [];
+          const select = document.getElementById('signUpCourse');
+          if (!select) return;
+          select.innerHTML = '<option value="">Select Course</option>' + courses.map((c) => `<option value="${c}">${c}</option>`).join('');
+        } catch (_e) {
+          console.warn('Could not load courses');
+        }
+      }
 
-          const res = await fetch("/api/register_request", { method: "POST", body: form });
-          const data = await parseJsonSafe(res);
-          if (!res.ok || !data?.success) {
-            const backendMessage = data?.message || "Unable to submit registration request.";
-            if (backendMessage === "ID Exists") {
-              alert("School ID already exists. Please use another ID or log in instead.");
-            } else if (backendMessage === "Existing pending request") {
-              alert("This School ID already has a pending registration request.");
-            } else {
-              alert(backendMessage);
-            }
-            return;
-          }
+      function showSignUpError(message) {
+        const errorEl = document.getElementById('signUpError');
+        if (!errorEl) return;
+        errorEl.hidden = false;
+        errorEl.textContent = message;
+      }
 
-          toggleModal("registerModal", false);
-          showStatusPopup("success", "Request Submitted", `Your Request ID is ${data.request_id}. Wait for admin approval.`);
-        } catch (error) {
-          alert("Network Error during registration.");
-        } finally {
-          if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.textContent = "SUBMIT REQUEST";
+      function handleSignUpLevelChange() {
+        const isHS = document.getElementById('signUpLevelHS')?.checked;
+        const yearSelect = document.getElementById('signUpYear');
+        const courseSelect = document.getElementById('signUpCourse');
+        const fgCourse = document.getElementById('fgSignUpCourse');
+        if (!yearSelect) return;
+
+        if (isHS) {
+          yearSelect.innerHTML = '<option value="">Select Grade</option>' + [7, 8, 9, 10].map((g) => `<option value="${g}">Grade ${g}</option>`).join('');
+          if (courseSelect) courseSelect.innerHTML = '<option value="N/A">N/A</option>';
+          if (fgCourse) {
+            fgCourse.style.opacity = '0.5';
+            fgCourse.style.pointerEvents = 'none';
+          }
+        } else {
+          yearSelect.innerHTML = '<option value="">Select Year</option>' + [1, 2, 3, 4].map((y) => `<option value="${y}">${y === 1 ? '1st' : y === 2 ? '2nd' : y === 3 ? '3rd' : '4th'} Year</option>`).join('');
+          loadCoursesIntoSelect();
+          if (fgCourse) {
+            fgCourse.style.opacity = '1';
+            fgCourse.style.pointerEvents = 'auto';
           }
         }
       }
 
+      async function submitSignUp() {
+        const name = document.getElementById('signUpName')?.value.trim() || '';
+        const schoolId = (document.getElementById('signUpId')?.value || '').trim().toLowerCase();
+        const yearLevel = document.getElementById('signUpYear')?.value || '';
+        const isHS = document.getElementById('signUpLevelHS')?.checked;
+        const schoolLevel = isHS ? 'highschool' : 'college';
+        const course = isHS ? 'N/A' : (document.getElementById('signUpCourse')?.value || '');
+        const password = document.getElementById('signUpPassword')?.value || '';
+        const confirm = document.getElementById('signUpConfirm')?.value || '';
+        const photoFile = document.getElementById('signUpPhotoFile')?.files?.[0];
+
+        const errorEl = document.getElementById('signUpError');
+        if (errorEl) errorEl.hidden = true;
+
+        if (!name) return showSignUpError('Please enter your student name.');
+        if (!schoolId) return showSignUpError('Please enter your School ID.');
+        if (!yearLevel) return showSignUpError(isHS ? 'Please select your grade level.' : 'Please select your year level.');
+        if (!isHS && !course) return showSignUpError('Please select your course.');
+        if (!password) return showSignUpError('Please create a password.');
+        if (password.length < 6) return showSignUpError('Password must be at least 6 characters.');
+        if (password !== confirm) return showSignUpError('Passwords do not match.');
+
+        const btn = document.getElementById('signUpSubmitBtn');
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+        }
+
+        const fd = new FormData();
+        fd.append('name', name);
+        fd.append('school_id', schoolId);
+        fd.append('year_level', yearLevel);
+        fd.append('school_level', schoolLevel);
+        fd.append('course', course);
+        fd.append('password', password);
+        fd.append('confirm', confirm);
+        if (photoFile) fd.append('photo', photoFile);
+
+        try {
+          const res = await fetch('/api/register_request', { method: 'POST', body: fd });
+          const data = await res.json();
+
+          if (data.success) {
+            ['fgSignUpName', 'fgSignUpId', 'fgSignUpLevel', 'fgSignUpYear', 'fgSignUpCourse', 'fgSignUpPassword', 'fgSignUpConfirm', 'fgSignUpReqNum'].forEach((id) => {
+              const el = document.getElementById(id);
+              if (el) el.style.display = 'none';
+            });
+            const circle = document.getElementById('signUpPhotoCircle');
+            const hint = document.querySelector('.signup-photo-hint');
+            if (circle) circle.style.display = 'none';
+            if (hint) hint.style.display = 'none';
+            if (btn) btn.style.display = 'none';
+            const cancelBtn = document.getElementById('signUpCancelBtn');
+            if (cancelBtn) cancelBtn.textContent = 'Close';
+            const footerLink = document.getElementById('signUpFooterLink');
+            if (footerLink) footerLink.style.display = 'none';
+            const reqNumSpan = document.getElementById('signUpSuccessReqNum');
+            if (reqNumSpan) reqNumSpan.textContent = `#${data.request_number}`;
+            const successEl = document.getElementById('signUpSuccess');
+            if (successEl) successEl.hidden = false;
+            if (errorEl) errorEl.hidden = true;
+          } else {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+            }
+            showSignUpError(data.message || 'Submission failed.');
+          }
+        } catch (_e) {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+          }
+          showSignUpError('Connection error. Please try again.');
+        }
+      }
+
+
       function resetRegistrationForm() {
-        ["regName", "regID", "regPass"].forEach((id) => {
+        ["signUpName", "signUpId", "signUpPassword", "signUpConfirm"].forEach((id) => {
           const el = document.getElementById(id);
           if (el) el.value = "";
         });
-        const photoInput = document.getElementById("regPhoto");
+        const photoInput = document.getElementById("signUpPhotoFile");
         if (photoInput) photoInput.value = "";
         const preview = document.getElementById("previewImg");
         const icon = document.getElementById("uploadIcon");
@@ -1132,8 +1203,25 @@ let currentID = null;
 
       function toggleModal(id, show) {
         document.getElementById(id).style.display = show ? "flex" : "none";
-        if (id === "registerModal" && !show) {
-          resetRegistrationForm();
+        if (id === "registerModal") {
+          if (!show) {
+            resetRegistrationForm();
+          } else {
+            const collegeRadio = document.getElementById("signUpLevelCollege");
+            if (collegeRadio) collegeRadio.checked = true;
+            handleSignUpLevelChange();
+            loadCoursesIntoSelect();
+            const yr = document.getElementById("signUpYear");
+            if (yr) yr.value = "";
+            const cs = document.getElementById("signUpCourse");
+            if (cs) cs.value = "";
+            const reqDisp = document.getElementById("signUpReqNumDisplay");
+            if (reqDisp) reqDisp.textContent = "Auto-generated on submit";
+            const success = document.getElementById("signUpSuccess");
+            if (success) success.hidden = true;
+            const err = document.getElementById("signUpError");
+            if (err) err.hidden = true;
+          }
         }
         if (id === "reserveModal" && !show) {
           const timeField = document.getElementById("reservePickupTime");
@@ -1327,3 +1415,8 @@ let currentID = null;
       document.addEventListener("DOMContentLoaded", function() {
         initializeLBAS();
       });
+
+
+      document.getElementById('signUpLevelCollege')?.addEventListener('change', handleSignUpLevelChange);
+      document.getElementById('signUpLevelHS')?.addEventListener('change', handleSignUpLevelChange);
+      window.submitSignUp = submitSignUp;

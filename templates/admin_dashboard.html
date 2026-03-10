@@ -264,7 +264,7 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     <h5 class="fw-bold mb-0"><i class="fas fa-address-card text-warning me-2"></i>Registration Request List</h5>
-                    <p class="small text-muted mb-0">Request format: Request ID / Profile Pic / Name / ID / Approve / Reject</p>
+                    <p class="small text-muted mb-0">Review and decide incoming registration applications.</p>
                 </div>
                 <button class="btn btn-outline-secondary btn-sm" onclick="loadData()">Refresh</button>
             </div>
@@ -272,17 +272,34 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="bg-light text-muted">
                         <tr class="small text-uppercase">
-                            <th class="ps-4">Request ID</th>
-                            <th>Profile Pic</th>
+                            <th class="ps-4">Request #</th>
                             <th>Name</th>
-                            <th>ID</th>
-                            <th>Action</th>
+                            <th>School ID</th>
+                            <th>Year</th>
+                            <th>Course</th>
+                            <th>School Level</th>
+                            <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="registrationRequestsBody"></tbody>
                 </table>
             </div>
-        </div>
+        
+            <hr class="my-4">
+            <div class="row g-3 align-items-end">
+                <div class="col-12">
+                    <h6 class="fw-bold mb-1"><i class="fas fa-graduation-cap me-2 text-primary"></i>Course Management</h6>
+                    <div id="courseTagsContainer" class="d-flex flex-wrap gap-2 mb-2"></div>
+                </div>
+                <div class="col-md-8">
+                    <input id="courseInput" class="form-control" placeholder="e.g. BSCS">
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-primary w-100" onclick="addCourseTag()">Add Course</button>
+                </div>
+            </div>
+</div>
     </div>
 
     <div id="inventoryView" class="view-section">

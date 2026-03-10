@@ -106,39 +106,71 @@
     </div>
 
     <div id="registerModal" class="modal-overlay">
-      <div class="custom-modal text-start">
+      <div class="custom-modal text-start" id="signUpModal">
         <h4 class="fw-bold text-center mb-1">Create Account Request</h4>
         <p class="text-muted small text-center mb-4">Submit your details for librarian approval.</p>
 
-        <div class="upload-circle" onclick="document.getElementById('regPhoto').click()">
+        <div class="upload-circle" id="signUpPhotoCircle" onclick="document.getElementById('signUpPhotoFile').click()">
           <i class="fas fa-camera upload-icon" id="uploadIcon"></i>
           <img id="previewImg" alt="Profile preview" />
         </div>
+        <small class="signup-photo-hint d-block text-center mb-2">Optional profile photo</small>
 
-        <input type="file" id="regPhoto" accept="image/*" style="display: none" onchange="previewPhoto(this)" />
+        <input type="file" id="signUpPhotoFile" accept="image/*" style="display: none" onchange="previewPhoto(this)" />
+        <hr>
 
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">Profile Name</label>
-          <input type="text" id="regName" class="form-control rounded-pill bg-light border-0 px-3" placeholder="e.g. Juan Dela Cruz" />
+        <div class="mb-3" id="fgSignUpName">
+          <label class="small fw-bold ms-2" for="signUpName">Student Name</label>
+          <input type="text" id="signUpName" class="form-control rounded-pill bg-light border-0 px-3" placeholder="e.g. Juan Dela Cruz" />
+        </div>
+        <div class="mb-3" id="fgSignUpId">
+          <label class="small fw-bold ms-2" for="signUpId">School ID</label>
+          <input type="text" id="signUpId" class="form-control rounded-pill bg-light border-0 px-3" placeholder="Type your School ID manually" />
+          <small class="signup-field-hint">Enter exactly as printed on your ID card.</small>
+        </div>
+        <div class="mb-3" id="fgSignUpLevel">
+          <label class="small fw-bold ms-2">School Level</label>
+          <div class="signup-level-options">
+            <label class="signup-radio-label"><input type="radio" name="signUpLevel" id="signUpLevelCollege" value="college" checked /> College</label>
+            <label class="signup-radio-label"><input type="radio" name="signUpLevel" id="signUpLevelHS" value="highschool" /> High School</label>
+          </div>
+        </div>
+        <div class="mb-3" id="fgSignUpYear">
+          <label class="small fw-bold ms-2" for="signUpYear">Year Level</label>
+          <select id="signUpYear" class="form-control rounded-pill bg-light border-0 px-3">
+            <option value="">Select Year</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option>
+          </select>
+        </div>
+        <div class="mb-3" id="fgSignUpCourse">
+          <label class="small fw-bold ms-2" for="signUpCourse">Course</label>
+          <select id="signUpCourse" class="form-control rounded-pill bg-light border-0 px-3"><option value="">Loading...</option></select>
+        </div>
+        <div class="mb-3" id="fgSignUpPassword">
+          <label class="small fw-bold ms-2" for="signUpPassword">Password</label>
+          <input type="password" id="signUpPassword" class="form-control rounded-pill bg-light border-0 px-3" placeholder="Minimum 6 characters" />
+        </div>
+        <div class="mb-3" id="fgSignUpConfirm">
+          <label class="small fw-bold ms-2" for="signUpConfirm">Confirm Password</label>
+          <input type="password" id="signUpConfirm" class="form-control rounded-pill bg-light border-0 px-3" placeholder="Re-enter your password" />
+        </div>
+        <div class="mb-3" id="fgSignUpReqNum">
+          <label class="small fw-bold ms-2">Request Number</label>
+          <div id="signUpReqNumDisplay" class="signup-req-num">Auto-generated on submit</div>
+          <small class="signup-field-hint">This number is assigned automatically.</small>
         </div>
 
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">School ID</label>
-          <input type="text" id="regID" class="form-control rounded-pill bg-light border-0 px-3" placeholder="e.g. 2023-0015" />
+        <div id="signUpError" class="alert alert-danger small mt-2" hidden></div>
+        <div id="signUpSuccess" class="signup-success-msg" hidden>
+          <i class="fas fa-check-circle"></i>
+          <div>
+            <strong>Application Submitted!</strong>
+            <p>Your request number is <span id="signUpSuccessReqNum" class="signup-req-num-highlight"></span>. Please wait for the librarian to review and approve your account. You will not be able to log in until approved.</p>
+          </div>
         </div>
 
-        <div class="mb-3">
-          <label class="small fw-bold ms-2">Create Password</label>
-          <input type="password" id="regPass" class="form-control rounded-pill bg-light border-0 px-3" placeholder="••••••••" />
-        </div>
-
-        <div class="mb-4">
-          <label class="small fw-bold ms-2">Account Type</label>
-          <input type="text" class="form-control rounded-pill bg-light border-0 px-3" value="Student" readonly />
-        </div>
-
-        <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 mb-2" onclick="submitRegistrationRequest()">SUBMIT REQUEST</button>
-        <button class="btn btn-outline-secondary w-100 rounded-pill fw-bold py-2" onclick="toggleModal('registerModal', false)">CANCEL</button>
+        <button id="signUpSubmitBtn" class="btn btn-primary w-100 rounded-pill fw-bold py-2 mb-2" onclick="submitSignUp()"><i class="fas fa-paper-plane"></i> Submit Request</button>
+        <button id="signUpCancelBtn" class="btn btn-outline-secondary w-100 rounded-pill fw-bold py-2" onclick="toggleModal('registerModal', false)">Cancel</button>
+        <div id="signUpFooterLink" class="text-center mt-2"><a id="signUpLoginLink" href="#" onclick="toggleModal('registerModal', false);return false;">Already have account?</a></div>
       </div>
     </div>
 
