@@ -204,8 +204,8 @@
     if (landingToggle) landingToggle.textContent = isLoggedIn ? 'Account' : 'Log in';
     if (landingAdminItem) landingAdminItem.style.display = isLoggedIn ? 'none' : '';
     if (landingAction) {
-      landingAction.textContent = isLoggedIn ? 'Log out' : 'Log in';
-      landingAction.href = isLoggedIn ? '#' : '/lbas';
+      landingAction.textContent = isLoggedIn ? 'Log out' : 'Sign Up';
+      landingAction.href = isLoggedIn ? '#' : '/lbas?view=signup';
       landingAction.onclick = isLoggedIn
         ? async function (event) {
             event.preventDefault();

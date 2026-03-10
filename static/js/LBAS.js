@@ -413,9 +413,11 @@ let currentID = null;
         if (authToggle) authToggle.textContent = isLoggedIn ? "Account" : "Log in";
         if (adminItem) adminItem.style.display = isLoggedIn ? "none" : "";
         if (authAction) {
-          authAction.textContent = isLoggedIn ? "Log out" : "Log in";
-          authAction.href = isLoggedIn ? "#" : "#loginSection";
-          authAction.onclick = isLoggedIn ? () => { logout(); return false; } : null;
+          authAction.textContent = isLoggedIn ? "Log out" : "Sign Up";
+          authAction.href = isLoggedIn ? "#" : "#";
+          authAction.onclick = isLoggedIn
+          ? () => { logout(); return false; }
+          : () => { toggleModal("registerModal", true); return false; };
         }
       }
 
@@ -1517,6 +1519,11 @@ let currentID = null;
             keepalive: true,
           });
         });
+
+        const viewParam = new URLSearchParams(window.location.search).get("view");
+        if (String(viewParam || "").toLowerCase() === "signup") {
+          toggleModal("registerModal", true);
+        }
       }
 
       document.addEventListener("DOMContentLoaded", function() {

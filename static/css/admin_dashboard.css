@@ -490,6 +490,38 @@
         .sync-indicator { width: 12px; height: 12px; border-radius: 50%; display: inline-block; background: #94a3b8; margin-right: 8px; transition: 0.3s; }
         .sync-online { background: var(--success); box-shadow: 0 0 15px var(--success); }
 
+
+        .custom-nav {
+            background: rgba(10, 22, 40, 0.92);
+            backdrop-filter: blur(2px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1500;
+        }
+
+        .custom-nav .nav-link,
+        .custom-nav .dropdown-toggle,
+        .custom-nav .navbar-brand {
+            color: #e9f2ff !important;
+            font-weight: 600;
+        }
+
+        .custom-nav .nav-link:hover,
+        .custom-nav .dropdown-item:hover {
+            color: #38bdf8 !important;
+        }
+
+        .custom-nav .navbar-toggler {
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .custom-nav .navbar-toggler-icon {
+            filter: invert(1);
+        }
+
+        .admin-login-only {
+            width: min(100%, 460px);
+        }
+
         /* ===== HEADER STYLE ===== */
       .main-header {
         position: relative;

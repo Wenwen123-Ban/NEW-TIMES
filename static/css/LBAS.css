@@ -1084,3 +1084,16 @@
   background: #f1f3f5;
   color: #adb5bd;
 }
+
+
+#signUpModal {
+  width: min(100%, 460px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+
+.single-login-wrap {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  justify-content: center;
+}
