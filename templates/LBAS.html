@@ -50,7 +50,7 @@
               <a id="lbasAuthToggle" class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Log in</a>
               <ul id="lbasAuthMenu" class="dropdown-menu dropdown-menu-end">
                 <li><a id="lbasAdminLoginItem" class="dropdown-item" href="{{ url_for('admin_site') }}">Admin Log in</a></li>
-                <li><a id="lbasAuthAction" class="dropdown-item" href="#loginSection">Log in</a></li>
+                <li><a id="lbasAuthAction" class="dropdown-item" href="#registerModal" onclick="toggleModal('registerModal', true); return false;">Sign Up</a></li>
               </ul>
             </li>
           </ul>
@@ -150,7 +150,7 @@
 
     <div id="registerModal" class="modal-overlay">
       <div class="custom-modal text-start" id="signUpModal">
-        <h4 class="fw-bold text-center mb-1">Create Account Request</h4>
+        <h4 class="fw-bold text-center mb-1">Request Account Approval</h4>
         <p class="text-muted small text-center mb-4">Submit your details for librarian approval.</p>
 
         <div class="upload-circle" id="signUpPhotoCircle" onclick="document.getElementById('signUpPhotoFile').click()">
@@ -218,36 +218,8 @@
     </div>
 
     <div id="loginSection" class="content" style="display: none">
-      <div class="welcome-slider-wrap">
-        <button id="studentPrevBtn" class="slide-nav-btn" onclick="shiftStudentLoginStep(-1)">&lt;</button>
-
-        <div id="studentWelcomeStep" class="welcome-flow-card">
-          <div class="welcome-icon-badge mb-3"><i class="fas fa-graduation-cap"></i></div>
-          <h3 class="fw-bold text-dark mb-1">Welcome Students!</h3>
-          <p class="text-muted small mb-0">Welcome to the Library Borrowing and Assistance System.</p>
-          <button
-            type="button"
-            class="btn btn-outline-light btn-sm rounded-pill fw-bold mobile-login-cta d-md-none"
-            onclick="jumpToStudentLogin()"
-          >
-            Continue
-          </button>
-        </div>
-
-        <div id="studentManualStep" class="welcome-flow-card hidden-step">
-          <div class="welcome-icon-badge mb-3"><i class="fas fa-circle-info"></i></div>
-          <h4 class="fw-bold text-dark mb-2">Quick Manual</h4>
-          <p class="text-muted small mb-0">Hi students Be Responsible Borrower and making a responsible Reservations of the books and good luck studying!</p>
-          <button
-            type="button"
-            class="btn btn-outline-light btn-sm rounded-pill fw-bold mobile-login-cta d-md-none"
-            onclick="jumpToStudentLogin()"
-          >
-            Login Now
-          </button>
-        </div>
-
-        <div id="studentLoginCard" class="login-card hidden-step hidden-mobile">
+      <div class="welcome-slider-wrap single-login-wrap">
+        <div id="studentLoginCard" class="login-card">
         <div class="mb-4">
           <div
             class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center shadow-lg"
@@ -277,7 +249,7 @@
 
         <p class="small text-muted mb-2">Registration is managed by the official school database.</p>
         <button class="btn btn-outline-primary btn-sm rounded-pill fw-bold" onclick="toggleModal('registerModal', true)">
-          Create Account
+          Request Account Approval
         </button>
 
         <div
@@ -289,8 +261,6 @@
           <span id="errorText">CREDENTIALS INVALID</span>
         </div>
       </div>
-
-        <button id="studentNextBtn" class="slide-nav-btn" onclick="shiftStudentLoginStep(1)">&gt;</button>
       </div>
       <div class="mt-4 text-muted small opacity-50">
         Authorized Access Only | V7.2-BETA
