@@ -14,6 +14,7 @@ let currentID = null;
       let pendingReservationRequests = new Set();
       let pendingReserveBookNo = null;
       let currentProfile = null;
+      let isGuestMode = true;
       let latestBooksByCode = {};
       let allCollectionOrder = [];
       let categoryCollectionOrder = {};
@@ -392,6 +393,60 @@ let currentID = null;
         setStudentLoginStep(activeStep);
       });
 
+
+      function isAuthenticatedUser() {
+        return Boolean(currentID && currentToken);
+      }
+
+      async function handleReserveLogin() {
+        const idField = document.getElementById("reserveLoginSchoolID");
+        const passField = document.getElementById("reserveLoginPassword");
+        const errBox = document.getElementById("reserveLoginError");
+        const schoolID = (idField?.value || "").trim();
+        const password = (passField?.value || "").trim();
+
+        if (!schoolID || !password) {
+          if (errBox) {
+            errBox.style.display = "block";
+            errBox.textContent = "School ID and password are required.";
+          }
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ school_id: schoolID, password }),
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.success || !data.token) {
+            if (errBox) {
+              errBox.style.display = "block";
+              errBox.textContent = data.message || "Login failed.";
+            }
+            return;
+          }
+
+          currentID = schoolID;
+          currentToken = data.token;
+          isGuestMode = false;
+          initPortal(data.profile);
+          toggleModal("reserveLoginModal", false);
+          if (pendingReserveBookNo) {
+            const targetBook = pendingReserveBookNo;
+            pendingReserveBookNo = null;
+            reserveBook(targetBook);
+          }
+        } catch (error) {
+          if (errBox) {
+            errBox.style.display = "block";
+            errBox.textContent = "Unable to connect to server.";
+          }
+        }
+      }
+
       async function handleLogin() {
         const id = document.getElementById("school_id_input").value.trim();
         if (!id) return;
@@ -580,6 +635,7 @@ let currentID = null;
 
       function initPortal(profile) {
         if (!profile) return logout();
+        isGuestMode = false;
 
         if (dataInterval) clearInterval(dataInterval);
         if (timerInterval) clearInterval(timerInterval);
@@ -631,30 +687,19 @@ let currentID = null;
           const authHeaders = currentToken
             ? { Authorization: currentToken }
             : {};
-          console.log("[LBAS] fetch -> /api/books + /api/transactions", { hasToken: Boolean(currentToken) });
-          const [bRes, tRes] = await Promise.all([
-            fetch("/api/books", { headers: authHeaders }),
-            fetch("/api/transactions", { headers: authHeaders }),
-          ]);
-          console.log("[LBAS] fetch <- statuses", { books: bRes.status, transactions: tRes.status });
+          const bRes = await fetch("/api/books", { headers: authHeaders });
+          const tRes = isAuthenticatedUser()
+            ? await fetch("/api/transactions", { headers: authHeaders })
+            : null;
 
           if (!bRes.ok) {
-            if (bRes.status === 401) {
-              showStatusPopup(
-                "warning",
-                "Session Expired",
-                "Your session has expired. Please login again to load books and reservations.",
-              );
-              logout();
-              return;
-            }
             document.getElementById("bookContainer").innerHTML =
-              '<div class="text-center text-danger mt-5"><i class="fas fa-lock fa-2x mb-3"></i><br>Unable to load books. Please login again.</div>';
+              '<div class="text-center text-danger mt-5"><i class="fas fa-lock fa-2x mb-3"></i><br>Unable to load books right now.</div>';
             return;
           }
 
           const books = await bRes.json();
-          const trans = tRes.ok
+          const trans = tRes && tRes.ok
             ? parseTransactionPayload(await tRes.json())
             : [];
 
@@ -747,14 +792,23 @@ let currentID = null;
       }
 
       function reserveBook(no) {
-        const schoolID = String(currentID || "").trim();
-        if (!schoolID) {
-          alert("Session expired. Please login again.");
-          return;
-        }
         if (!no) return;
         if (pendingReservationRequests.has(no)) return;
 
+        if (!isAuthenticatedUser()) {
+          pendingReserveBookNo = no;
+          const idField = document.getElementById("reserveLoginSchoolID");
+          const passField = document.getElementById("reserveLoginPassword");
+          const errBox = document.getElementById("reserveLoginError");
+          if (idField) idField.value = "";
+          if (passField) passField.value = "";
+          if (errBox) {
+            errBox.style.display = "none";
+            errBox.textContent = "";
+          }
+          toggleModal("reserveLoginModal", true);
+          return;
+        }
 
         const book = latestBooksByCode[no] || {};
         pendingReserveBookNo = no;
@@ -1348,7 +1402,7 @@ let currentID = null;
         closeAccountModal();
         toggleModal("reserveModal", false);
         document.getElementById("bookContainer").innerHTML = "";
-        window.location.href = "/";
+        
       }
 
       function initializeLBAS() {
@@ -1391,25 +1445,25 @@ let currentID = null;
 
         fetchCategories();
         hydrateDisplaySettings();
-        const savedID = localStorage.getItem("lbas_id");
-        const savedToken = localStorage.getItem("lbas_token");
-        if (savedID && savedToken) {
-          currentID = savedID;
-          currentToken = savedToken;
-          fetch("/api/user/" + savedID)
-            .then((r) => r.json())
-            .then((d) => {
-              if (d.profile && d.profile.status !== "pending") {
-                initPortal(d.profile);
-              } else {
-                logout();
-              }
-            })
-            .catch(logout);
-        } else if (savedID || savedToken) {
-          localStorage.removeItem("lbas_id");
-          localStorage.removeItem("lbas_token");
-        }
+        document.getElementById("loginSection").style.display = "none";
+        document.getElementById("portalSection").style.display = "block";
+        document.getElementById("display_name").innerText = "Guest";
+        document.getElementById("full_name").innerText = "Guest User";
+        document.getElementById("id_val").innerText = "ID: -";
+        document.getElementById("database_source").innerText = "CREDENTIAL: GUEST";
+        document.getElementById("user_type_label").innerText = "PUBLIC ACCESS";
+        document.getElementById("user_pic").src = "/Profile/default.png";
+        switchPortalView("catalog");
+        loadData();
+
+        window.addEventListener("beforeunload", () => {
+          if (!currentToken) return;
+          fetch("/api/logout", {
+            method: "POST",
+            headers: { Authorization: currentToken },
+            keepalive: true,
+          });
+        });
       }
 
       document.addEventListener("DOMContentLoaded", function() {
@@ -1420,3 +1474,4 @@ let currentID = null;
       document.getElementById('signUpLevelCollege')?.addEventListener('change', handleSignUpLevelChange);
       document.getElementById('signUpLevelHS')?.addEventListener('change', handleSignUpLevelChange);
       window.submitSignUp = submitSignUp;
+      window.handleReserveLogin = handleReserveLogin;

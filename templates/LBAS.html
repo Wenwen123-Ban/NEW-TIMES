@@ -56,6 +56,25 @@
       </div>
     </div>
 
+
+    <div id="reserveLoginModal" class="modal-overlay">
+      <div class="custom-modal text-start">
+        <h4 class="fw-bold text-center mb-1">Login Required</h4>
+        <p class="text-muted small text-center mb-4">Please login with your ID and password to continue your reservation.</p>
+        <div class="mb-3">
+          <label class="small fw-bold ms-2" for="reserveLoginSchoolID">School ID</label>
+          <input type="text" id="reserveLoginSchoolID" class="form-control rounded-pill bg-light border-0 px-3" placeholder="Enter School ID" />
+        </div>
+        <div class="mb-3">
+          <label class="small fw-bold ms-2" for="reserveLoginPassword">Password</label>
+          <input type="password" id="reserveLoginPassword" class="form-control rounded-pill bg-light border-0 px-3" placeholder="Enter Password" />
+        </div>
+        <div id="reserveLoginError" class="alert alert-danger small py-2" style="display:none;"></div>
+        <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 mb-2" onclick="handleReserveLogin()">LOGIN & CONTINUE</button>
+        <button class="btn btn-outline-secondary w-100 rounded-pill fw-bold py-2" onclick="toggleModal('reserveLoginModal', false)">Cancel</button>
+      </div>
+    </div>
+
     <div id="reserveModal" class="modal-overlay">
       <div class="custom-modal text-start">
         <h4 class="fw-bold text-center mb-1">Reserve Book</h4>
@@ -174,7 +193,7 @@
       </div>
     </div>
 
-    <div id="loginSection" class="content">
+    <div id="loginSection" class="content" style="display: none">
       <div class="welcome-slider-wrap">
         <button id="studentPrevBtn" class="slide-nav-btn" onclick="shiftStudentLoginStep(-1)">&lt;</button>
 
@@ -254,7 +273,7 @@
       </div>
     </div>
 
-    <div id="portalSection" class="content" style="display: none">
+    <div id="portalSection" class="content">
       <nav class="mobile-nav shadow-sm">
         <div>
           <span
