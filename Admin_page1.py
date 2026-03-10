@@ -22,6 +22,8 @@ from flask import (
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 
+from api.transactions import enrich_reservation_queue
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("LBAS_SECRET_KEY", "lbas-admin-session-secret")
 logging.basicConfig(
@@ -1253,7 +1255,7 @@ def api_admin_get_admins():
 def api_admin_get_transactions():
     if not require_admin_session():
         return jsonify({"success": False, "message": "Admin authorization required"}), 401
-    return jsonify(get_db("transactions"))
+    return jsonify(enrich_reservation_queue(get_db("transactions")))
 
 
 @app.route("/api/admin/approval-records")
@@ -1393,45 +1395,7 @@ def api_get_admins():
 def api_get_transactions():
     if not require_auth():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
-    transactions = get_db("transactions")
-    if not isinstance(transactions, list):
-        transactions = []
-
-    for tx in transactions:
-        status = str(tx.get("status", "")).strip().lower()
-        if status != "reserved":
-            continue
-
-        book_no = tx.get("book_no")
-        book_queue = sorted(
-            [
-                t
-                for t in transactions
-                if t.get("book_no") == book_no
-                and str(t.get("status", "")).strip().lower() == "reserved"
-            ],
-            key=_pickup_sort_key,
-        )
-
-        tx["queue_position"] = next(
-            (
-                i + 1
-                for i, t in enumerate(book_queue)
-                if str(t.get("school_id", "")).strip().lower()
-                == str(tx.get("school_id", "")).strip().lower()
-            ),
-            None,
-        )
-        tx["queue_total"] = len(book_queue)
-        tx["same_slot_conflict"] = (
-            sum(
-                1
-                for t in book_queue
-                if t.get("pickup_schedule") == tx.get("pickup_schedule")
-            )
-            > 1
-        )
-    return jsonify(transactions)
+    return jsonify(enrich_reservation_queue(get_db("transactions")))
 
 
 @app.route("/api/admin_approval_record")
