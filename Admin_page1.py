@@ -894,15 +894,11 @@ def api_register_librarian():
 
 @app.route("/api/register_request", methods=["POST"])
 def api_register_request():
-    import re
-
     name = str(request.form.get("name", "")).strip()
     school_id = str(request.form.get("school_id", "")).strip().lower()
     year_level = str(request.form.get("year_level", "")).strip()
     school_level = str(request.form.get("school_level", "")).strip().lower()
     course = str(request.form.get("course", "")).strip()
-    contact_type = str(request.form.get("contact_type", "phone")).strip().lower()
-    contact_value = str(request.form.get("contact_value", "")).strip()
     password = str(request.form.get("password", "")).strip()
     confirm = str(request.form.get("confirm", "")).strip()
     photo_file = request.files.get("photo")
@@ -916,25 +912,15 @@ def api_register_request():
 
     if school_level == "college":
         if year_level not in ["1", "2", "3", "4"]:
-            return jsonify({"success": False, "message": "Invalid year level."}), 400
+            return jsonify({"success": False, "message": "Invalid year level for college."}), 400
         if not course:
             return jsonify({"success": False, "message": "Please select a course."}), 400
     elif school_level == "highschool":
         if year_level not in ["7", "8", "9", "10"]:
-            return jsonify({"success": False, "message": "Invalid grade level."}), 400
+            return jsonify({"success": False, "message": "Invalid grade level for high school."}), 400
         course = "N/A"
     else:
         return jsonify({"success": False, "message": "Invalid school level."}), 400
-
-    if contact_type == "phone":
-        digits = re.sub(r"\D", "", contact_value)
-        if len(digits) < 10:
-            return jsonify({"success": False, "message": "Enter a valid phone number."}), 400
-    elif contact_type == "email":
-        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", contact_value):
-            return jsonify({"success": False, "message": "Enter a valid email address."}), 400
-    else:
-        return jsonify({"success": False, "message": "Invalid contact type."}), 400
 
     if find_any_user(school_id):
         return jsonify({"success": False, "message": "School ID already registered."}), 409
@@ -953,18 +939,18 @@ def api_register_request():
             photo_file.save(os.path.join(PROFILE_FOLDER, fname))
             saved_photo = fname
 
-    req_num = len(reqs) + 1
-    req_num_str = f"{req_num:04d}"
+    temp_num = len(reqs) + 1
+    req_num_str = f"{temp_num:04d}"
+    req_id = f"REG-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
+
     reqs.append({
-        "request_id": req_num_str,
+        "request_id": req_id,
         "request_number": req_num_str,
         "name": name,
         "school_id": school_id,
         "year_level": year_level,
         "school_level": school_level,
         "course": course,
-        "contact_type": contact_type,
-        "contact_value": contact_value,
         "password": password,
         "photo": saved_photo,
         "status": "pending",
@@ -973,7 +959,35 @@ def api_register_request():
         "reviewed_at": "",
     })
     save_db("registration_requests", reqs)
-    return jsonify({"success": True, "request_number": req_num_str, "message": f"Request #{req_num_str} submitted. Await librarian approval."})
+    return jsonify({"success": True, "request_number": req_num_str, "message": f"Request #{req_num_str} submitted. Await admin approval."})
+
+
+def get_next_approved_request_number():
+    reqs = get_db("registration_requests")
+    if not isinstance(reqs, list):
+        reqs = []
+    approved_count = sum(1 for r in reqs if str(r.get("status", "")).lower() == "approved")
+    return f"{approved_count + 1:04d}"
+
+
+def recalculate_request_numbers(reqs):
+    counter = 1
+    for r in sorted(reqs, key=lambda x: x.get("created_at", "")):
+        status = str(r.get("status", "")).lower()
+        current = str(r.get("request_number", "")).strip()
+        raw_current = current
+        if current.startswith("R-"):
+            raw_current = current[2:]
+        elif current.startswith("P-"):
+            raw_current = current[2:]
+        if status == "approved":
+            r["request_number"] = f"{counter:04d}"
+            counter += 1
+        elif status == "rejected":
+            r["request_number"] = f"R-{raw_current or '?'}"
+        else:
+            r["request_number"] = raw_current or "0000"
+    return reqs
 
 
 @app.route("/api/admin/registration-requests")
@@ -1019,16 +1033,14 @@ def api_reg_request_decision(request_id):
             "year_level": req.get("year_level", ""),
             "school_level": req.get("school_level", ""),
             "course": req.get("course", ""),
-            "contact_type": req.get("contact_type", ""),
-            "contact_value": req.get("contact_value", ""),
             "category": "Student",
             "status": "approved",
             "is_staff": False,
-            "phone_number": req.get("contact_value", ""),
+            "phone_number": "",
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         })
         save_db("users", users)
-
+    reqs = recalculate_request_numbers(reqs)
     save_db("registration_requests", reqs)
     return jsonify({"success": True})
 
@@ -2097,7 +2109,10 @@ def _normalize_news_posts(raw_posts):
 
 @app.route("/api/courses")
 def api_get_courses():
-    return jsonify(get_db("courses") or {"courses": ["BSIT", "BSAM", "BSIS"], "hs_grades": [7, 8, 9, 10], "college_years": [1, 2, 3, 4]})
+    data = get_db("courses")
+    if isinstance(data, dict):
+        return jsonify(data)
+    return jsonify({"courses": ["BSIT", "BSAM", "BSIS"], "hs_grades": [7, 8, 9, 10], "college_years": [1, 2, 3, 4]})
 
 
 @app.route("/api/admin/courses", methods=["POST"])
@@ -2106,10 +2121,12 @@ def api_admin_save_courses():
         return jsonify({"success": False, "message": "Unauthorized"}), 401
     data = request.json or {}
     courses = data.get("courses", [])
-    if not isinstance(courses, list):
-        return jsonify({"success": False, "message": "courses must be a list."}), 400
-    existing = get_db("courses") or {}
-    existing["courses"] = [str(c).strip() for c in courses if str(c).strip()]
+    if not isinstance(courses, list) or any(not str(c).strip() for c in courses):
+        return jsonify({"success": False, "message": "courses must be an array of non-empty strings."}), 400
+    existing = get_db("courses")
+    if not isinstance(existing, dict):
+        existing = {"courses": [], "hs_grades": [7, 8, 9, 10], "college_years": [1, 2, 3, 4]}
+    existing["courses"] = [str(c).strip() for c in courses]
     save_db("courses", existing)
     return jsonify({"success": True, "courses": existing["courses"]})
 

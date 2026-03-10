@@ -176,7 +176,7 @@ async function loadCoursesIntoSelect() {
   } catch (e) { console.warn('Could not load courses'); }
 }
 
-function handleLevelChange() {
+function handleSignUpLevelChange() {
   const isHS = qs('signUpLevelHS')?.checked;
   const yearSel = qs('signUpYear');
   const courseSel = qs('signUpCourse');
@@ -195,28 +195,101 @@ function handleLevelChange() {
 
 function showSignUpError(msg) { const el = qs('signUpError'); if (el) { el.hidden = false; el.textContent = msg; } }
 
-function openSignUpModal() { closeModal('userLoginModal'); openModal('signUpModal'); handleLevelChange(); }
+function openSignUpModal() { closeModal('userLoginModal'); openModal('signUpModal');
+  const fields = ['signUpName','signUpId','signUpPassword','signUpConfirm'];
+  fields.forEach((id) => { const el = qs(id); if (el) el.value = ''; });
+  const err = qs('signUpError');
+  const ok = qs('signUpSuccess');
+  if (err) { err.hidden = true; err.textContent = ''; }
+  if (ok) ok.hidden = true;
+  const collegeRadio = qs('signUpLevelCollege');
+  if (collegeRadio) collegeRadio.checked = true;
+  handleSignUpLevelChange();
+  loadCoursesIntoSelect();
+  const yr = qs('signUpYear');
+  if (yr) yr.value = '';
+  const cs = qs('signUpCourse');
+  if (cs) cs.value = '';
+  const reqDisp = qs('signUpReqNumDisplay');
+  if (reqDisp) reqDisp.textContent = 'Auto-generated on submit'; }
 
 async function submitSignUp() {
   const name = qs('signUpName')?.value.trim() || '';
-  const schoolId = qs('signUpId')?.value.trim().toLowerCase() || '';
+  const schoolId = (qs('signUpId')?.value || '').trim().toLowerCase();
   const yearLevel = qs('signUpYear')?.value || '';
   const isHS = qs('signUpLevelHS')?.checked;
   const schoolLevel = isHS ? 'highschool' : 'college';
   const course = isHS ? 'N/A' : (qs('signUpCourse')?.value || '');
-  const contactType = qs('signUpContactType')?.value || 'phone';
-  const contactValue = qs('signUpContactValue')?.value.trim() || '';
   const password = qs('signUpPassword')?.value || '';
   const confirm = qs('signUpConfirm')?.value || '';
   const photoFile = qs('signUpPhotoFile')?.files?.[0];
-  if (!name || !schoolId || !yearLevel || !contactValue || !password || !confirm) return showSignUpError('Please fill all required fields.');
+
+  if (!name) return showSignUpError('Please enter your student name.');
+  if (!schoolId) return showSignUpError('Please enter your School ID.');
+  if (!yearLevel) return showSignUpError(isHS ? 'Please select your grade level.' : 'Please select your year level.');
+  if (!isHS && !course) return showSignUpError('Please select your course.');
+  if (!password) return showSignUpError('Please create a password.');
+  if (password.length < 6) return showSignUpError('Password must be at least 6 characters.');
+  if (password !== confirm) return showSignUpError('Passwords do not match.');
+
+  const btn = qs('signUpSubmitBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+  }
+
   const fd = new FormData();
-  fd.append('name', name); fd.append('school_id', schoolId); fd.append('year_level', yearLevel); fd.append('school_level', schoolLevel); fd.append('course', course); fd.append('contact_type', contactType); fd.append('contact_value', contactValue); fd.append('password', password); fd.append('confirm', confirm); if (photoFile) fd.append('photo', photoFile);
-  const res = await fetch('/api/register_request', { method: 'POST', body: fd });
-  const data = await res.json();
-  if (!data.success) return showSignUpError(data.message || 'Submission failed.');
-  qs('signUpSuccessReqNum').textContent = `#${data.request_number}`;
-  qs('signUpSuccess').hidden = false;
+  fd.append('name', name);
+  fd.append('school_id', schoolId);
+  fd.append('year_level', yearLevel);
+  fd.append('school_level', schoolLevel);
+  fd.append('course', course);
+  fd.append('password', password);
+  fd.append('confirm', confirm);
+  if (photoFile) fd.append('photo', photoFile);
+
+  try {
+    const res = await fetch('/api/register_request', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (data.success) {
+      ['fgSignUpName', 'fgSignUpId', 'fgSignUpLevel', 'fgSignUpYear', 'fgSignUpCourse', 'fgSignUpPassword', 'fgSignUpConfirm', 'fgSignUpReqNum'].forEach((id) => {
+        const el = qs(id);
+        if (el) el.style.display = 'none';
+      });
+
+      const circle = qs('signUpPhotoCircle');
+      const hint = document.querySelector('.signup-photo-hint');
+      if (circle) circle.style.display = 'none';
+      if (hint) hint.style.display = 'none';
+
+      if (btn) btn.style.display = 'none';
+      const cancelBtn = qs('signUpCancelBtn');
+      if (cancelBtn) cancelBtn.textContent = 'Close';
+      const footerLink = qs('signUpFooterLink');
+      if (footerLink) footerLink.style.display = 'none';
+
+      const reqNumSpan = qs('signUpSuccessReqNum');
+      if (reqNumSpan) reqNumSpan.textContent = `#${data.request_number}`;
+
+      const successEl = qs('signUpSuccess');
+      const errorEl = qs('signUpError');
+      if (successEl) successEl.hidden = false;
+      if (errorEl) errorEl.hidden = true;
+    } else {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+      }
+      showSignUpError(data.message || 'Submission failed.');
+    }
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+    }
+    showSignUpError('Connection error. Please try again.');
+  }
 }
 
 async function loadHomeCards() { const res = await fetch('/api/home_cards'); const cards = await res.json(); const el = qs('homeCardsGrid'); if (!el) return; el.innerHTML = cards.map((c) => `<article class="home-card"><h4>${safe(c.title || 'Card')}</h4><p>${safe(c.body || '')}</p></article>`).join(''); }
@@ -237,6 +310,8 @@ document.addEventListener('DOMContentLoaded', () => {
   loadLeaderboard();
   qs('verifyOnlyBtn')?.addEventListener('click', verifyIdOnly);
   qs('openSignUpBtn')?.addEventListener('click', openSignUpModal);
+  qs('signUpLevelCollege')?.addEventListener('change', handleSignUpLevelChange);
+  qs('signUpLevelHS')?.addEventListener('change', handleSignUpLevelChange);
   qs('signUpSubmitBtn')?.addEventListener('click', submitSignUp);
   qs('openAccountPanel')?.addEventListener('click', openAccountPanel);
   qs('closeAccountPanel')?.addEventListener('click', () => qs('accountPanelOverlay')?.classList.remove('open'));

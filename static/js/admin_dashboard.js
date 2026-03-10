@@ -6,6 +6,7 @@ let currentRole = 'student',
         masterCategories = [],
         masterApprovalRecords = [],
         masterRegistrationRequests = [],
+        masterCourses = [],
         masterHomeCards = [],
         masterNewsPosts = [],
         adminHistory = JSON.parse(localStorage.getItem('adminHistory') || '[]'), 
@@ -115,6 +116,7 @@ let editModal;
 
         mountAdminDropdown();
         bindDashboardDelegatedEvents();
+        document.getElementById('addCourseBtn')?.addEventListener('click', addCourseTag);
         document.getElementById('newsPostImage')?.addEventListener('change', syncNewsUploadPreview);
         document.getElementById('newsUploadPreview')?.addEventListener('click', () => {
             const src = document.getElementById('newsUploadPreview')?.getAttribute('src');
@@ -199,6 +201,7 @@ let editModal;
             renderBorrowedBooksList();
             renderBookRegistrationStats();
             await renderAdminHistory();
+            await loadCourses();
             
         } catch(e) { 
             console.error("Data Sync Failed", e); 
@@ -683,21 +686,22 @@ let editModal;
         const body = document.getElementById('registrationRequestsBody');
         if (!body) return;
 
-        const requests = (masterRegistrationRequests || [])
-            .filter((row) => String(row.status || 'pending').toLowerCase() === 'pending')
-            .reverse();
+        const requests = (masterRegistrationRequests || []).slice().reverse();
 
         body.innerHTML = requests.map((row) => `
             <tr>
-                <td class="ps-4"><code class="fw-bold text-dark">${row.request_id || '-'}</code></td>
-                <td><img src="/Profile/${row.photo || 'default.png'}" class="user-row-img shadow-sm"></td>
+                <td class="ps-4 fw-bold">#${row.request_number || '-'}</td>
                 <td class="fw-bold">${row.name || '-'}</td>
                 <td><code class="fw-bold text-dark">${row.school_id || '-'}</code></td>
+                <td>${row.year_level || '-'}</td>
+                <td>${row.course || '-'}</td>
+                <td>${row.school_level || '-'}</td>
+                <td><span class="badge ${String(row.status || '').toLowerCase() === 'approved' ? 'bg-success' : String(row.status || '').toLowerCase() === 'rejected' ? 'bg-danger' : 'bg-warning text-dark'}">${row.status || 'pending'}</span></td>
                 <td>
                     <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openRegistrationRequest('${row.request_id}')">Open</button>
                 </td>
             </tr>
-        `).join('') || '<tr><td colspan="5" class="text-center py-4 text-muted">No pending registration requests.</td></tr>';
+        `).join('') || '<tr><td colspan="8" class="text-center py-4 text-muted">No registration requests.</td></tr>';
     }
 
     function openRegistrationRequest(requestID) {
@@ -712,7 +716,7 @@ let editModal;
                 <div><span class="fw-bold text-dark">Request ID:</span> ${row.request_id || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Profile Name:</span> ${row.name || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">ID:</span> ${row.school_id || '-'}</div>
-                <div class="mt-1"><span class="fw-bold text-dark">Requested Role:</span> ${(row.role || 'student').toUpperCase()}</div>
+                <div class="mt-1"><span class="fw-bold text-dark">School Level:</span> ${(row.school_level || '-')}</div><div class="mt-1"><span class="fw-bold text-dark">Year Level:</span> ${(row.year_level || '-')}</div><div class="mt-1"><span class="fw-bold text-dark">Course:</span> ${(row.course || '-')}</div><div class="mt-1"><span class="fw-bold text-dark">Request #:</span> #${row.request_number || '-'}</div>
                 <div class="mt-1"><span class="fw-bold text-dark">Created:</span> ${row.created_at || '-'}</div>
             </div>
             <div class="d-flex gap-2 mt-4">
@@ -820,6 +824,66 @@ let editModal;
         transactionDetailModal.show();
     }
 
+
+    async function loadCourses() {
+        try {
+            const res = await apiFetch('/api/courses', { method: 'GET' }, false);
+            const data = await res.json();
+            masterCourses = Array.isArray(data.courses) ? data.courses : [];
+            renderCourseTags();
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    function renderCourseTags() {
+        const wrap = document.getElementById('courseTags');
+        if (!wrap) return;
+        wrap.innerHTML = (masterCourses || []).map((course) => `
+            <span class="badge bg-primary d-inline-flex align-items-center gap-2 px-3 py-2">
+                ${course}
+                <button class="btn btn-sm btn-light py-0 px-1" onclick="removeCourseTag('${course}')">×</button>
+            </span>
+        `).join('') || '<span class="text-muted small">No courses configured.</span>';
+    }
+
+    async function saveCourses() {
+        try {
+            const res = await apiFetch('/api/admin/courses', {
+                method: 'POST',
+                body: JSON.stringify({ courses: masterCourses })
+            }, false);
+            const data = await res.json();
+            if (!data.success) {
+                alert(data.message || 'Unable to save courses.');
+                return;
+            }
+            masterCourses = Array.isArray(data.courses) ? data.courses : [];
+            renderCourseTags();
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    function addCourseTag() {
+        const input = document.getElementById('courseInput');
+        if (!input) return;
+        const value = input.value.trim();
+        if (!value) return;
+        if (!masterCourses.includes(value)) {
+            masterCourses.push(value);
+            saveCourses();
+        }
+        input.value = '';
+    }
+
+    function removeCourseTag(course) {
+        masterCourses = (masterCourses || []).filter((row) => row !== course);
+        saveCourses();
+    }
+
+    window.addCourseTag = addCourseTag;
+    window.removeCourseTag = removeCourseTag;
     function renderBookRegistrationStats() {
         const target = document.getElementById('bookRegistrationStats');
         if (!target) return;
