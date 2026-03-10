@@ -34,6 +34,30 @@
       </div>
     </header>
 
+    <nav class="navbar navbar-expand-lg custom-nav sticky-top">
+      <div class="container">
+        <a class="navbar-brand fw-bold text-light" href="{{ url_for('index_gateway') }}#home">LBAS</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#lbasLandingNav" aria-controls="lbasLandingNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="lbasLandingNav">
+          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('index_gateway') }}#home">Home</a></li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('index_gateway') }}#news">News</a></li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('index_gateway') }}#catalog">Leaderboard</a></li>
+            <li class="nav-item"><a class="nav-link active" aria-current="page" href="{{ url_for('lbas_site') }}">Books</a></li>
+            <li class="nav-item dropdown">
+              <a id="lbasAuthToggle" class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Log in</a>
+              <ul id="lbasAuthMenu" class="dropdown-menu dropdown-menu-end">
+                <li><a id="lbasAdminLoginItem" class="dropdown-item" href="{{ url_for('admin_site') }}">Admin Log in</a></li>
+                <li><a id="lbasAuthAction" class="dropdown-item" href="#loginSection">Log in</a></li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
     <div class="network-banner">LBAS System v8.0 – UI Stabilization & Structural Hardening</div>
 
     <div id="statusModal" class="modal-overlay">
@@ -338,12 +362,6 @@
           <label for="booksPerPageMobile" class="form-label small mb-1">Books per page (Mobile)</label>
           <input id="booksPerPageMobile" type="number" class="form-control form-control-sm" min="4" max="40" value="10" onchange="saveDisplaySettings()" />
         </div>
-        <button
-          class="btn btn-danger btn-sm w-100 rounded-pill fw-bold py-2"
-          onclick="logout()"
-        >
-          TERMINATE SESSION
-        </button>
       </div>
 
       <div class="container py-4">
