@@ -1,6 +1,154 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Book Page</title><link rel="stylesheet" href="{{ url_for('static', filename='css/Book_page.css') }}"></head><body>
-<input id="catalogSearchInput"><div id="catalogCategoryPills"></div><div id="catalogResultCount"></div><div id="catalogBookGrid"></div>
-<div id="bookReserveModal" style="display:none"><span id="modalBookTitle"></span><span id="modalBookAuthor"></span><span id="modalBookNo"></span><span id="modalBookCategory"></span><input type="hidden" id="reserveSchoolId"><input id="reservePickupDate" type="date"><input id="reservePickupTime" type="time"><select id="reserveContactType"><option value="phone">phone</option><option value="email">email</option></select><input id="reserveContactValue"><button id="reserveSubmitBtn">Submit</button></div>
-<div id="idLoginModal" style="display:none"><input id="userSchoolId"><button id="verifyIdBtn">Verify</button></div><button id="idLoginFab" onclick="openLoginModal()">Login</button><button id="accountMenuToggle"></button><button id="logoutSessionBtn" style="display:none">Logout</button><div id="toast" style="display:none"></div>
-<div id="signUpModal" style="display:none"><div id="signUpPhotoCircle"></div><div id="signUpCameraIcon"></div><img id="signUpPhotoPreview"><input id="signUpPhotoFile" type="file"><input id="signUpName"><input id="signUpId"><input id="signUpEmail"><input id="signUpPassword"><input id="signUpConfirm"><div id="signUpError"></div><div id="signUpSuccess"></div><span id="signUpSuccessEmail"></span><button id="signUpSubmitBtn"></button><button id="signUpCancelBtn"></button><button id="signUpCloseBtn"></button><a id="signUpLoginLink"></a><a id="signUpFooterLink"></a><button id="openSignUpFromBookLoginBtn" onclick="openSignUpModal()"></button><input id="fgSignUpName"><input id="fgSignUpId"><input id="fgSignUpEmail"><input id="fgSignUpPassword"><input id="fgSignUpConfirm"></div>
-<script src="{{ url_for('static', filename='js/Book_page.js') }}"></script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LBAS Public Catalog</title>
+  <link rel="stylesheet" href="/static/Book_page.css">
+</head>
+<body>
+  <header class="catalog-header">
+    <div class="brand-wrap">
+      <div class="brand-logo">📘</div>
+      <div class="brand-name">LBAS Library</div>
+    </div>
+    <nav class="top-nav">
+      <a href="/">Home</a>
+      <a href="/books">Books</a>
+      <a href="/lbas">LBAS Portal</a>
+      <a href="/admin">Admin</a>
+    </nav>
+    <div class="account-wrap">
+      <button id="accountMenuToggle">Account</button>
+      <button id="logoutSessionBtn" class="hidden">Logout</button>
+    </div>
+  </header>
+
+  <main class="catalog-main">
+    <section class="search-row">
+      <input id="catalogSearchInput" type="text" placeholder="Search title, author, or book no...">
+    </section>
+
+    <section class="pill-row">
+      <div id="catalogCategoryPills"></div>
+    </section>
+
+    <section class="result-row">
+      <div id="catalogResultCount">0 books</div>
+    </section>
+
+    <section>
+      <div id="catalogBookGrid" class="catalog-grid"></div>
+    </section>
+  </main>
+
+  <button id="idLoginFab" class="fab">Verify ID</button>
+
+  <footer class="catalog-footer">
+    <div>Public Book Catalog</div>
+  </footer>
+
+  <div id="idLoginModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3>ID Verification</h3>
+      <label for="userSchoolId">School ID</label>
+      <input id="userSchoolId" type="text">
+      <button id="verifyIdBtn">Verify</button>
+      <button id="openSignUpFromLoginBtn" class="link-btn">Sign up</button>
+      <button data-close="idLoginModal" class="ghost">Close</button>
+    </div>
+  </div>
+
+  <div id="signUpModal" class="modal-overlay hidden">
+    <div class="modal-card large">
+      <h3>Sign Up Request</h3>
+      <div id="signUpPhotoCircle" class="photo-circle">
+        <img id="signUpPhotoPreview" src="/Profile/default.png" alt="preview">
+        <span id="signUpCameraIcon">📷</span>
+      </div>
+      <input id="signUpPhotoFile" type="file" hidden accept="image/*">
+      <div id="fgSignUpName" class="form-group"><label>Name</label><input id="signUpName" type="text"></div>
+      <div id="fgSignUpId" class="form-group"><label>School ID</label><input id="signUpId" type="text"></div>
+      <div id="fgSignUpEmail" class="form-group"><label>Email</label><input id="signUpEmail" type="email"></div>
+      <div id="fgSignUpPassword" class="form-group"><label>Password</label><input id="signUpPassword" type="password"></div>
+      <div id="fgSignUpConfirm" class="form-group"><label>Confirm Password</label><input id="signUpConfirm" type="password"></div>
+      <p id="signUpError" class="error hidden"></p>
+      <p id="signUpSuccess" class="success hidden">Request sent to <span id="signUpSuccessEmail"></span></p>
+      <div class="modal-actions">
+        <button id="signUpSubmitBtn">Submit</button>
+        <button id="signUpCancelBtn" class="ghost">Cancel</button>
+        <button id="signUpCloseBtn" class="ghost">Close</button>
+      </div>
+      <div id="signUpFooterLink">
+        <button id="signUpLoginLink" class="link-btn">Back to Login</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="bookReserveModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3 id="modalBookTitle"></h3>
+      <p>Author: <span id="modalBookAuthor"></span></p>
+      <p>Book No: <span id="modalBookNo"></span></p>
+      <p>Category: <span id="modalBookCategory"></span></p>
+      <p>Status: <span id="modalBookStatus"></span></p>
+      <label for="reservePickupDate">Pickup Date</label>
+      <input id="reservePickupDate" type="date">
+      <label for="reservePickupTime">Pickup Time</label>
+      <input id="reservePickupTime" type="time">
+      <label for="reserveContactType">Contact Type</label>
+      <select id="reserveContactType">
+        <option value="phone">phone</option>
+        <option value="email">email</option>
+      </select>
+      <label for="reserveContactValue">Contact</label>
+      <input id="reserveContactValue" type="text">
+      <input id="reserveSchoolId" type="hidden">
+      <button id="reserveSubmitBtn">Reserve</button>
+      <button data-close="bookReserveModal" class="ghost">Close</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/Book_page.js"></script>
+  <!-- book pad 001 -->
+  <!-- book pad 002 -->
+  <!-- book pad 003 -->
+  <!-- book pad 004 -->
+  <!-- book pad 005 -->
+  <!-- book pad 006 -->
+  <!-- book pad 007 -->
+  <!-- book pad 008 -->
+  <!-- book pad 009 -->
+  <!-- book pad 010 -->
+  <!-- book pad 011 -->
+  <!-- book pad 012 -->
+  <!-- book pad 013 -->
+  <!-- book pad 014 -->
+  <!-- book pad 015 -->
+  <!-- book pad 016 -->
+  <!-- book pad 017 -->
+  <!-- book pad 018 -->
+  <!-- book pad 019 -->
+  <!-- book pad 020 -->
+  <!-- book pad 021 -->
+  <!-- book pad 022 -->
+  <!-- book pad 023 -->
+  <!-- book pad 024 -->
+  <!-- book pad 025 -->
+  <!-- book pad 026 -->
+  <!-- book pad 027 -->
+  <!-- book pad 028 -->
+  <!-- book pad 029 -->
+  <!-- book pad 030 -->
+  <!-- book pad 031 -->
+  <!-- book pad 032 -->
+  <!-- book pad 033 -->
+  <!-- book pad 034 -->
+  <!-- book pad 035 -->
+  <!-- book pad 036 -->
+  <!-- book pad 037 -->
+  <!-- book pad 038 -->
+</body>
+</html>

@@ -1,0 +1,241 @@
+:root {
+  --blue-900: #0f2d52;
+  --blue-700: #1d4b84;
+  --cream: #faf7f2;
+  --card: #ffffff;
+  --border: #dbe4ef;
+  --ok: #228b22;
+  --warn: #d9822b;
+  --bad: #c23b3b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: #13243a;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.catalog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background: var(--blue-900);
+  color: #fff;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+}
+
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-nav {
+  display: flex;
+  gap: 14px;
+}
+
+.top-nav a {
+  color: #e7f0ff;
+  text-decoration: none;
+}
+
+.catalog-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.search-row input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+#catalogCategoryPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.catalog-pill {
+  border: 1px solid var(--blue-700);
+  background: #fff;
+  color: var(--blue-700);
+  padding: 7px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.catalog-pill.active {
+  background: var(--blue-700);
+  color: #fff;
+}
+
+.catalog-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.catalog-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  box-shadow: 0 6px 18px rgba(15, 45, 82, 0.08);
+}
+
+.catalog-card-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.catalog-card-author {
+  color: #51637a;
+}
+
+.catalog-status-badge {
+  display: inline-block;
+  width: fit-content;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.status-available {
+  background: var(--ok);
+}
+
+.status-reserved {
+  background: var(--warn);
+}
+
+.status-borrowed {
+  background: var(--bad);
+}
+
+button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  background: var(--blue-700);
+  color: #fff;
+}
+
+button.ghost {
+  background: #e9eef7;
+  color: #1e3552;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  z-index: 100;
+}
+
+.modal-card {
+  background: #fff;
+  width: min(560px, 100%);
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.modal-card.large {
+  width: min(660px, 100%);
+}
+
+.form-group {
+  display: grid;
+  gap: 5px;
+}
+
+.photo-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+  margin: 0 auto;
+}
+
+.photo-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#signUpCameraIcon {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+}
+
+#error,
+.success {
+  margin: 0;
+}
+
+.fab {
+  position: fixed;
+  right: 20px;
+  bottom: 18px;
+  border-radius: 999px;
+  padding: 12px 15px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+#toast {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1d2e4a;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+
+@media (max-width: 780px) {
+  .catalog-header {
+    flex-wrap: wrap;
+  }
+
+  .top-nav {
+    order: 3;
+    width: 100%;
+    justify-content: space-around;
+  }
+}
